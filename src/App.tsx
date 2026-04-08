@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "./components/sidebar";
 import { LoginPage } from "./components/login-page";
 import { DashboardPage } from "./components/dashboard-page";
@@ -15,11 +16,27 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [page, setPage] = useState<Page>("dashboard");
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [profiles, setProfiles] = useState<WatchProfile[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
   const themeCtx = useTheme();
+  const queryClient = useQueryClient();
+
+  const {
+    data: templates = [],
+    isLoading: loadingTemplates,
+    refetch: refreshTemplates,
+  } = useQuery({
+    queryKey: ["templates"],
+    queryFn: () => fetchTemplates(),
+    enabled: connected,
+  });
+
+  const {
+    data: profiles = [],
+  } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: () => getProfiles(),
+    enabled: connected,
+  });
 
   useEffect(() => {
     (async () => {
@@ -29,8 +46,10 @@ export default function App() {
         const session = await invoke<{ connected: boolean; apiUrl: string; apiKey: string }>("check_saved_session");
         if (session.connected) {
           setConnected(true);
-          try { setTemplates(await invoke<Template[]>("fetch_templates")); } catch {}
-          try { setProfiles(await invoke<WatchProfile[]>("get_profiles")); } catch {}
+          try {
+            const tmpl = await invoke<Template[]>("fetch_templates");
+            queryClient.setQueryData(["templates"], tmpl);
+          } catch {}
         } else if (session.apiKey) {
           setSavedApiKey(session.apiKey);
         }
@@ -38,21 +57,10 @@ export default function App() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (connected) void getProfiles().then(setProfiles).catch(() => {});
-  }, [connected]);
-
-  const refreshTemplates = useCallback(async () => {
-    if (!connected) return;
-    setLoadingTemplates(true);
-    try { setTemplates(await fetchTemplates()); } catch {} finally { setLoadingTemplates(false); }
-  }, [connected]);
-
   function handleConnected(session: { apiUrl: string; apiKey: string; templates: Template[] }) {
     setConnected(true);
-    setTemplates(session.templates);
+    queryClient.setQueryData(["templates"], session.templates);
     setPage("dashboard");
-    void getProfiles().then(setProfiles).catch(() => {});
   }
 
   async function handleDisconnect() {
@@ -63,11 +71,13 @@ export default function App() {
       }
     } catch {}
     setConnected(false);
-    setTemplates([]);
-    setProfiles([]);
+    queryClient.clear();
   }
 
-  function handleProfilesChanged(updated: WatchProfile[]) { setProfiles(updated); }
+  function handleProfilesChanged(updated: WatchProfile[]) {
+    queryClient.setQueryData(["profiles"], updated);
+  }
+  const handleRefreshTemplates = async () => { await refreshTemplates(); };
   const activeCount = profiles.filter((p) => p.isActive).length;
 
   if (checking) {
@@ -93,9 +103,9 @@ export default function App() {
       <main className="flex-1 overflow-hidden">
         <div className="page-enter h-full">
           {page === "dashboard" && <DashboardPage profiles={profiles} templates={templates} connected={connected}
-            onNavigate={setPage} onProfilesChanged={handleProfilesChanged} onRefreshTemplates={refreshTemplates} loadingTemplates={loadingTemplates} />}
+            onNavigate={setPage} onProfilesChanged={handleProfilesChanged} onRefreshTemplates={handleRefreshTemplates} loadingTemplates={loadingTemplates} />}
           {page === "profiles" && <ProfilesPage profiles={profiles} templates={templates} connected={connected}
-            onProfilesChanged={handleProfilesChanged} onRefreshTemplates={refreshTemplates} loadingTemplates={loadingTemplates} />}
+            onProfilesChanged={handleProfilesChanged} onRefreshTemplates={handleRefreshTemplates} loadingTemplates={loadingTemplates} />}
           {page === "logs" && <LogPage profiles={profiles} />}
         </div>
       </main>

@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/tauri/tauri.conf.json",
   "productName": "カミトル デスクトップ",
   "identifier": "com.kamitoru.desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

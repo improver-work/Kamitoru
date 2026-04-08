@@ -323,6 +323,21 @@ fn move_file(source: String, destination: String) -> Result<(), String> {
 }
 
 // ============================================================
+// Log Maintenance
+// ============================================================
+
+#[tauri::command]
+fn cleanup_old_logs(days: Option<u32>, state: State<'_, AppState>) -> Result<u32, String> {
+    let retention_days = days.unwrap_or(90);
+    state.db.delete_old_logs(retention_days)
+}
+
+#[tauri::command]
+fn get_log_count(state: State<'_, AppState>) -> Result<u32, String> {
+    state.db.count_logs()
+}
+
+// ============================================================
 // App Entry
 // ============================================================
 
@@ -350,6 +365,14 @@ pub fn run() {
             let db_path = app_dir.join("kamitoru-desktop.db");
             println!("[App] Database: {}", db_path.display());
             let db = Database::open(&db_path).expect("Failed to open database");
+
+            // 起動時に90日以上前のログを自動削除
+            match db.delete_old_logs(90) {
+                Ok(deleted) if deleted > 0 => println!("[App] 起動時ログクリーンアップ: {}件削除", deleted),
+                Ok(_) => {},
+                Err(e) => println!("[App] ログクリーンアップ失敗（無視）: {}", e),
+            }
+
             app.manage(AppState { db, api_client: Mutex::new(None), stop_flags: Mutex::new(HashMap::new()) });
 
             // System tray with right-click menu
@@ -452,6 +475,7 @@ pub fn run() {
             get_profiles, create_profile, update_profile, delete_profile, toggle_profile_active,
             extract_file, batch_extract, download_csv,
             get_processing_logs, move_file,
+            cleanup_old_logs, get_log_count,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

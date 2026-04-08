@@ -25,13 +25,16 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
+        
         run: npm ci
 
       - name: Lint
+        
         run: npm run lint
         continue-on-error: true
 
       - name: Type check
+        
         run: npx tsc --noEmit
 
   rust-check:
@@ -101,10 +104,12 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Install dependencies
+        
         run: npm ci
 
       - name: Build Tauri app
-        run: npx tauri build
+        
+        run: npm run tauri build
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

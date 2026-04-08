@@ -210,6 +210,29 @@ impl Database {
 
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| format!("Row error: {}", e))
     }
+
+    /// 指定日数より古い処理ログを削除する
+    pub fn delete_old_logs(&self, retention_days: u32) -> Result<u32, String> {
+        let conn = self.conn.lock().unwrap();
+        let deleted = conn.execute(
+            "DELETE FROM processing_logs WHERE created_at < datetime('now', ?1)",
+            params![format!("-{} days", retention_days)],
+        ).map_err(|e| format!("Delete old logs error: {}", e))?;
+        if deleted > 0 {
+            println!("[DB] {}日以上前のログを{}件削除しました", retention_days, deleted);
+        }
+        Ok(deleted as u32)
+    }
+
+    /// 処理ログの総件数を取得
+    pub fn count_logs(&self) -> Result<u32, String> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT COUNT(*) FROM processing_logs",
+            [],
+            |row| row.get::<_, u32>(0),
+        ).map_err(|e| format!("Count logs error: {}", e))
+    }
 }
 
 // ===== Row types =====
