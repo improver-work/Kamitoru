@@ -338,6 +338,23 @@ fn get_log_count(state: State<'_, AppState>) -> Result<u32, String> {
 }
 
 // ============================================================
+// AI Usage
+// ============================================================
+
+#[tauri::command]
+async fn fetch_ai_usage(
+    period: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let client = get_client(&state)?;
+    let p = period.as_deref().unwrap_or("daily");
+    let result = client.get_ai_usage(p, from.as_deref(), to.as_deref()).await?;
+    serde_json::to_value(&result).map_err(|e| format!("Serialize error: {}", e))
+}
+
+// ============================================================
 // App Entry
 // ============================================================
 
@@ -476,6 +493,7 @@ pub fn run() {
             extract_file, batch_extract, download_csv,
             get_processing_logs, move_file,
             cleanup_old_logs, get_log_count,
+            fetch_ai_usage,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

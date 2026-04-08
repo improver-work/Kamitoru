@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { Page } from "../App";
-import { type WatchProfile, type Template, type ProcessingLog, toggleProfileActive, getProcessingLogs } from "../lib/tauri-api";
+import { type WatchProfile, type Template, type ProcessingLog, type AiUsageResponse, toggleProfileActive, getProcessingLogs, getAiUsage } from "../lib/tauri-api";
 
 interface DashboardPageProps {
   profiles: WatchProfile[];
@@ -25,11 +25,33 @@ interface WatchEventPayload {
 export function DashboardPage({ profiles, templates, connected, onNavigate, onProfilesChanged, onRefreshTemplates, loadingTemplates }: DashboardPageProps) {
   const [recentLogs, setRecentLogs] = useState<ProcessingLog[]>([]);
   const [liveEvents, setLiveEvents] = useState<WatchEventPayload[]>([]);
+  const [aiUsage, setAiUsage] = useState<AiUsageResponse | null>(null);
+  const [aiUsageLoading, setAiUsageLoading] = useState(false);
   const activeCount = profiles.filter((p) => p.isActive).length;
+
+  const fetchAiUsage = useCallback(async () => {
+    if (!connected) return;
+    setAiUsageLoading(true);
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+      const from = `${year}-${month}-01`;
+      const to = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
+      const data = await getAiUsage("daily", from, to);
+      setAiUsage(data);
+    } catch (e) {
+      console.error("[AI Usage] fetch error:", e);
+    } finally {
+      setAiUsageLoading(false);
+    }
+  }, [connected]);
 
   useEffect(() => {
     void getProcessingLogs(8).then(setRecentLogs).catch(() => {});
-  }, []);
+    void fetchAiUsage();
+  }, [fetchAiUsage]);
 
   // Auto-fetch templates when connected but templates are empty
   useEffect(() => {
@@ -239,6 +261,124 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
           </div>
         </div>
       )}
+
+      {/* AI利用状況 */}
+      <div className="mt-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">AI利用状況（当月）</h2>
+          <button
+            onClick={() => void fetchAiUsage()}
+            disabled={aiUsageLoading}
+            className="text-xs font-medium"
+            style={{ color: "var(--sidebar-primary)" }}
+          >
+            {aiUsageLoading ? "取得中..." : "更新"}
+          </button>
+        </div>
+        {aiUsage ? (
+          <>
+            {/* サマリーカード */}
+            <div className="mb-3 grid grid-cols-3 gap-3">
+              <div className="rounded-xl p-3 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>トークン</p>
+                <p className="mt-1 text-lg font-bold tabular-nums">{aiUsage.totals.totalTokens >= 1000 ? `${(aiUsage.totals.totalTokens / 1000).toFixed(1)}K` : aiUsage.totals.totalTokens}</p>
+              </div>
+              <div className="rounded-xl p-3 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>概算コスト</p>
+                <p className="mt-1 text-lg font-bold tabular-nums">
+                  {(() => { const jpy = aiUsage.totals.estimatedCost * 150; return jpy < 1 ? `${jpy.toFixed(2)}円` : `約${Math.round(jpy)}円`; })()}
+                </p>
+              </div>
+              <div className="rounded-xl p-3 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>リクエスト</p>
+                <p className="mt-1 text-lg font-bold tabular-nums">{aiUsage.totals.requestCount}</p>
+              </div>
+            </div>
+
+            {/* 日別チャート */}
+            {aiUsage.data.length > 0 && (() => {
+              const now = new Date();
+              const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+              const dataMap = new Map(aiUsage.data.map((d) => [d.date, d]));
+              const allDays: { day: number; tokens: number }[] = [];
+              for (let i = 1; i <= daysInMonth; i++) {
+                const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
+                allDays.push({ day: i, tokens: dataMap.get(key)?.totalTokens ?? 0 });
+              }
+              const maxTokens = Math.max(...allDays.map((d) => d.tokens), 1);
+              const barArea = 80;
+
+              return (
+                <div className="rounded-xl border p-3" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                  <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>日別トークン使用量</p>
+                  <div className="flex items-end gap-[1px]" style={{ height: barArea + 16 }}>
+                    {allDays.map((d) => {
+                      const h = d.tokens > 0 ? Math.max(Math.round((d.tokens / maxTokens) * barArea), 2) : 0;
+                      return (
+                        <div key={d.day} className="flex flex-1 flex-col items-center">
+                          <div className="flex w-full flex-1 items-end" style={{ height: barArea }}>
+                            <div
+                              className="w-full rounded-t"
+                              style={{
+                                height: h,
+                                background: d.tokens > 0 ? "oklch(0.488 0.243 264.376)" : undefined,
+                              }}
+                              title={`${d.day}日: ${d.tokens >= 1000 ? `${(d.tokens / 1000).toFixed(1)}K` : d.tokens} tokens`}
+                            />
+                          </div>
+                          {(d.day === 1 || d.day % 5 === 0 || d.day === daysInMonth) && (
+                            <span className="text-[7px] tabular-nums" style={{ color: "var(--muted-foreground)", height: 16 }}>{d.day}</span>
+                          )}
+                          {!(d.day === 1 || d.day % 5 === 0 || d.day === daysInMonth) && (
+                            <span style={{ height: 16 }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* モデル別内訳 */}
+            {Object.keys(aiUsage.data.reduce((acc, d) => ({ ...acc, ...d.byModel }), {} as Record<string, unknown>)).length > 0 && (
+              <div className="mt-3 rounded-xl border p-3" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>モデル別内訳</p>
+                <div className="space-y-1.5">
+                  {(() => {
+                    const models = new Map<string, { tokens: number; cost: number; requests: number }>();
+                    for (const bucket of aiUsage.data) {
+                      for (const [model, stats] of Object.entries(bucket.byModel)) {
+                        const m = models.get(model) ?? { tokens: 0, cost: 0, requests: 0 };
+                        m.tokens += stats.tokens;
+                        m.cost += stats.cost;
+                        m.requests += stats.requests;
+                        models.set(model, m);
+                      }
+                    }
+                    return Array.from(models.entries()).sort(([, a], [, b]) => b.tokens - a.tokens).map(([model, stats]) => (
+                      <div key={model} className="flex items-center justify-between">
+                        <span className="rounded-md px-2 py-0.5 text-[10px] font-mono" style={{ background: "var(--secondary)", color: "var(--foreground)" }}>{model}</span>
+                        <div className="flex items-center gap-3 text-[11px] tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                          <span>{stats.tokens >= 1000 ? `${(stats.tokens / 1000).toFixed(1)}K` : stats.tokens} tokens</span>
+                          <span>{(() => { const jpy = stats.cost * 150; return jpy < 1 ? `${jpy.toFixed(2)}円` : `約${Math.round(jpy)}円`; })()}</span>
+                          <span>{stats.requests}件</span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-xl border p-6 text-center" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+              {aiUsageLoading ? "AI利用状況を取得中..." : "AI利用データがありません"}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

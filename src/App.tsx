@@ -5,10 +5,11 @@ import { LoginPage } from "./components/login-page";
 import { DashboardPage } from "./components/dashboard-page";
 import { ProfilesPage } from "./components/profiles-page";
 import { LogPage } from "./components/log-page";
+import { UsagePage } from "./components/usage-page";
 import { useTheme } from "./lib/theme";
 import { type Template, type WatchProfile, getProfiles, fetchTemplates } from "./lib/tauri-api";
 
-export type Page = "dashboard" | "profiles" | "logs";
+export type Page = "dashboard" | "profiles" | "logs" | "usage";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -107,6 +108,7 @@ export default function App() {
           {page === "profiles" && <ProfilesPage profiles={profiles} templates={templates} connected={connected}
             onProfilesChanged={handleProfilesChanged} onRefreshTemplates={handleRefreshTemplates} loadingTemplates={loadingTemplates} />}
           {page === "logs" && <LogPage profiles={profiles} />}
+          {page === "usage" && <UsagePage />}
         </div>
       </main>
     </div>

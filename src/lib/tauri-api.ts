@@ -203,3 +203,75 @@ export async function getProcessingLogs(limit?: number): Promise<ProcessingLog[]
 export async function moveFile(source: string, destination: string): Promise<void> {
   return invoke<void>("move_file", { source, destination });
 }
+
+// --- AI Usage ---
+
+export interface AiUsageEntry {
+  date: string;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  estimatedCost: number;
+  requestCount: number;
+  byModel: Record<string, { tokens: number; cost: number; requests: number }>;
+}
+
+export interface AiUsageTotals {
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  estimatedCost: number;
+  requestCount: number;
+}
+
+export interface AiUsageResponse {
+  period: string;
+  data: AiUsageEntry[];
+  totals: AiUsageTotals;
+}
+
+export async function getAiUsage(
+  period?: string,
+  from?: string,
+  to?: string,
+): Promise<AiUsageResponse> {
+  if (!isTauri) {
+    // ブラウザ開発用モック
+    return {
+      period: period ?? "daily",
+      data: [
+        {
+          date: "2026-04-08",
+          totalTokens: 12500,
+          promptTokens: 8200,
+          completionTokens: 4300,
+          estimatedCost: 0.038,
+          requestCount: 5,
+          byModel: {
+            "gpt-4o-mini": { tokens: 8000, cost: 0.024, requests: 3 },
+            "gemini-3-flash-preview": { tokens: 4500, cost: 0.014, requests: 2 },
+          },
+        },
+        {
+          date: "2026-04-07",
+          totalTokens: 8700,
+          promptTokens: 5800,
+          completionTokens: 2900,
+          estimatedCost: 0.026,
+          requestCount: 3,
+          byModel: {
+            "gpt-4o-mini": { tokens: 8700, cost: 0.026, requests: 3 },
+          },
+        },
+      ],
+      totals: {
+        totalTokens: 21200,
+        promptTokens: 14000,
+        completionTokens: 7200,
+        estimatedCost: 0.064,
+        requestCount: 8,
+      },
+    };
+  }
+  return invoke<AiUsageResponse>("fetch_ai_usage", { period, from, to });
+}

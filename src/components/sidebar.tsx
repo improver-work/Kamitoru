@@ -21,6 +21,7 @@ const NAV_ITEMS: { page: Page; label: string; iconPath: string }[] = [
   { page: "dashboard", label: "ダッシュボード", iconPath: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" },
   { page: "profiles", label: "監視プロファイル", iconPath: "M12 2 2 7l10 5 10-5zm0 13 10-5m-10 5L2 12m10 5L2 17l10 5 10-5" },
   { page: "logs", label: "処理ログ", iconPath: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7zM14 2v5h5M10 13H8M16 17H8" },
+  { page: "usage", label: "AI利用状況", iconPath: "M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
 ];
 
 export function Sidebar({ currentPage, onNavigate, connected, activeProfileCount, templateCount, onDisconnect, theme }: SidebarProps) {

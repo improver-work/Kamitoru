@@ -288,4 +288,83 @@ impl ApiClient {
             .map(|b| b.to_vec())
             .map_err(|e| format!("Download error: {}", e))
     }
+
+    /// GET /api/v1/ai-usage - AI利用状況の取得
+    pub async fn get_ai_usage(
+        &self,
+        period: &str,
+        from: Option<&str>,
+        to: Option<&str>,
+    ) -> Result<AiUsageResponse, String> {
+        let mut url = format!("{}?period={}", self.url("/ai-usage"), period);
+        if let Some(f) = from {
+            url.push_str(&format!("&from={}", f));
+        }
+        if let Some(t) = to {
+            url.push_str(&format!("&to={}", t));
+        }
+
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-API-Key", &self.api_key)
+            .send()
+            .await
+            .map_err(|e| format!("Connection error: {}", e))?;
+
+        if !resp.status().is_success() {
+            let err: ApiError = resp.json().await.unwrap_or(ApiError {
+                error: "Unknown error".into(),
+            });
+            return Err(err.error);
+        }
+
+        resp.json()
+            .await
+            .map_err(|e| format!("Parse error: {}", e))
+    }
+}
+
+// --- AI Usage types ---
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AiUsageResponse {
+    pub period: String,
+    pub data: Vec<AiUsageEntry>,
+    pub totals: AiUsageTotals,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AiUsageEntry {
+    pub date: String,
+    pub total_tokens: u64,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub estimated_cost: f64,
+    pub request_count: u32,
+    pub by_model: std::collections::HashMap<String, ModelUsage>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelUsage {
+    pub tokens: u64,
+    pub cost: f64,
+    pub requests: u32,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AiUsageTotals {
+    pub total_tokens: u64,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub estimated_cost: f64,
+    pub request_count: u32,
 }
