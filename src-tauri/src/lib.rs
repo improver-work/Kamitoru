@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_updater::UpdaterExt;
 
 // ============================================================
 // App State (SQLite-backed)
@@ -355,6 +356,35 @@ async fn fetch_ai_usage(
 }
 
 // ============================================================
+// Auto Update
+// ============================================================
+
+#[tauri::command]
+async fn check_for_update(app: AppHandle) -> Result<serde_json::Value, String> {
+    let updater = app.updater().map_err(|e| format!("Updater error: {}", e))?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(serde_json::json!({
+            "available": true,
+            "version": update.version,
+            "currentVersion": update.current_version,
+        })),
+        Ok(None) => Ok(serde_json::json!({ "available": false })),
+        Err(e) => Err(format!("Update check error: {}", e)),
+    }
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| format!("Updater error: {}", e))?;
+    let update = updater.check().await.map_err(|e| format!("Check error: {}", e))?
+        .ok_or("更新はありません")?;
+    println!("[Updater] ダウンロード開始: v{}", update.version);
+    update.download_and_install(|_, _| {}, || {}).await.map_err(|e| format!("Install error: {}", e))?;
+    println!("[Updater] インストール完了。再起動します...");
+    app.restart();
+}
+
+// ============================================================
 // App Entry
 // ============================================================
 
@@ -375,6 +405,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // Database
             let app_dir = app.path().app_data_dir().expect("Failed to get app data dir");
@@ -485,6 +516,29 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Auto-update check (5秒後にバックグラウンドで実行)
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                println!("[Updater] 更新チェック開始...");
+                match handle.updater() {
+                    Ok(updater) => {
+                        match updater.check().await {
+                            Ok(Some(update)) => {
+                                println!("[Updater] 新バージョン発見: {}", update.version);
+                                let _ = handle.emit("update-available", serde_json::json!({
+                                    "version": update.version,
+                                    "currentVersion": update.current_version,
+                                }));
+                            }
+                            Ok(None) => println!("[Updater] 最新バージョンです"),
+                            Err(e) => println!("[Updater] チェック失敗（無視）: {}", e),
+                        }
+                    }
+                    Err(e) => println!("[Updater] Updater未設定（無視）: {}", e),
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -494,6 +548,7 @@ pub fn run() {
             get_processing_logs, move_file,
             cleanup_old_logs, get_log_count,
             fetch_ai_usage,
+            check_for_update, install_update,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

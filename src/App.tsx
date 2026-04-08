@@ -18,6 +18,8 @@ export default function App() {
   const [checking, setChecking] = useState(true);
   const [page, setPage] = useState<Page>("dashboard");
   const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState<{ version: string } | null>(null);
+  const [updating, setUpdating] = useState(false);
   const themeCtx = useTheme();
   const queryClient = useQueryClient();
 
@@ -38,6 +40,21 @@ export default function App() {
     queryFn: () => getProfiles(),
     enabled: connected,
   });
+
+  // Listen for update-available event from Rust backend
+  useEffect(() => {
+    if (!isTauri) return;
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<{ version: string }>("update-available", (event) => {
+          setUpdateAvailable(event.payload);
+        });
+      } catch {}
+    })();
+    return () => { unlisten?.(); };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -81,6 +98,18 @@ export default function App() {
   const handleRefreshTemplates = async () => { await refreshTemplates(); };
   const activeCount = profiles.filter((p) => p.isActive).length;
 
+  async function handleInstallUpdate() {
+    if (!isTauri || updating) return;
+    setUpdating(true);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("install_update");
+    } catch (e) {
+      console.error("Update failed:", e);
+      setUpdating(false);
+    }
+  }
+
   if (checking) {
     return (
       <div className="flex h-screen items-center justify-center" style={{ background: "var(--background)", color: "var(--foreground)" }}>
@@ -101,8 +130,25 @@ export default function App() {
       <Sidebar currentPage={page} onNavigate={setPage} connected={connected}
         activeProfileCount={activeCount} templateCount={templates.length}
         onDisconnect={handleDisconnect} theme={themeCtx} />
-      <main className="flex-1 overflow-hidden">
-        <div className="page-enter h-full">
+      <main className="flex-1 overflow-hidden flex flex-col">
+        {/* 更新通知バナー */}
+        {updateAvailable && (
+          <div className="flex items-center justify-between px-4 py-2 text-sm" style={{ background: "oklch(0.488 0.243 264.376 / 0.1)", borderBottom: "1px solid oklch(0.488 0.243 264.376 / 0.2)" }}>
+            <span>
+              <span className="font-semibold" style={{ color: "oklch(0.488 0.243 264.376)" }}>v{updateAvailable.version}</span>
+              <span style={{ color: "var(--muted-foreground)" }}> が利用可能です</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setUpdateAvailable(null)} className="rounded px-2 py-1 text-xs" style={{ color: "var(--muted-foreground)" }}>後で</button>
+              <button onClick={handleInstallUpdate} disabled={updating}
+                className="rounded-md px-3 py-1 text-xs font-medium text-white transition"
+                style={{ background: "oklch(0.488 0.243 264.376)" }}>
+                {updating ? "更新中..." : "今すぐ更新"}
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="page-enter flex-1 overflow-hidden">
           {page === "dashboard" && <DashboardPage profiles={profiles} templates={templates} connected={connected}
             onNavigate={setPage} onProfilesChanged={handleProfilesChanged} onRefreshTemplates={handleRefreshTemplates} loadingTemplates={loadingTemplates} />}
           {page === "profiles" && <ProfilesPage profiles={profiles} templates={templates} connected={connected}
