@@ -76,19 +76,9 @@ jobs:
           if [ -f "$SIG_FILE" ]; then
             SIGNATURE=$(cat "$SIG_FILE")
           fi
-          cat > latest.json << EOF
-          {
-            "version": "$VERSION",
-            "notes": "カミトル デスクトップ v$VERSION",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "$SIGNATURE",
-                "url": "https://github.com/improver-work/Kamitoru/releases/download/v$VERSION/$EXE_NAME"
-              }
-            }
-          }
-          EOF
+          printf '{"version":"%s","notes":"カミトル デスクトップ v%s","pub_date":"%s","platforms":{"windows-x86_64":{"signature":"%s","url":"https://github.com/improver-work/Kamitoru/releases/download/v%s/%s"}}}' \
+            "$VERSION" "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SIGNATURE" "$VERSION" "$EXE_NAME" \
+            | python -m json.tool > latest.json
 
       - name: Upload updater manifest
         uses: softprops/action-gh-release@v2
