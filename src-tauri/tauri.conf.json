@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/tauri/tauri.conf.json",
+  "productName": "カミトル デスクトップ",
+  "identifier": "com.kamitoru.desktop",
+  "version": "0.1.0",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "カミトル デスクトップ",
+        "width": 960,
+        "height": 680,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/improver-work/Kamitoru/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5dmFtMGx6anRZZXFxWTFINjdMb0ZqU2VxcWVIRmd4SjJoU2syMDFWOXNxTUFBQkFBQUFBQUFBQUFBQUlBQUFBQUhrZkVJbUV3Slo5U1BnK05lVStaZUsyMkRyaHpWSlI3RnpZbUt3Z1ZFN0l6UThyZ2dCLzFXUkI5eThBUmtSWk91NGdybTJOVi9iY2hTU0xSTnhqNVEyelFDeDlzTjZ5YkZoTFNmckZJNWljcmFLTzg5d28welRJVVdNQVpPdkMzSWtOSFJSU0F0Sk09Cg=="
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Japanese"],
+        "displayLanguageSelector": false,
+        "startMenuFolder": "カミトル"
+      }
+    }
+  }
+}
