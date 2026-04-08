@@ -121,7 +121,7 @@ async fn test_connection(config: ConnectionConfig, state: State<'_, AppState>) -
     let client = ApiClient::new(&config.api_url, &config.api_key);
     match client.test_connection().await {
         Ok(templates) => {
-            state.db.save_connection(&config.api_url, &config.api_key, "", "", "", "", "")?;
+            state.db.save_connection(&config.api_url, "", "", "", "", "", "")?;
             let _ = save_api_key_to_keyring(&config.api_key);
             *state.api_client.lock().unwrap() = Some(client);
             println!("[Connection] Connected: {} templates", templates.len());
