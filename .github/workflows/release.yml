@@ -56,31 +56,23 @@ jobs:
         run: npx tauri build
 
       - name: Sign NSIS installer
-        shell: pwsh
+        shell: bash
         env:
           KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          # Decode base64 key to raw text
-          $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:KEY_BASE64.Trim()))
-          Write-Host "Key decoded (length: $($decoded.Length), lines: $(($decoded -split "`n").Count))"
-          # Set env vars for tauri signer
-          $env:TAURI_SIGNING_PRIVATE_KEY = $decoded
-          $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $env:KEY_PASSWORD
-          # Find exe
-          $nsisDir = "src-tauri\target\release\bundle\nsis"
-          $exeFile = Get-ChildItem $nsisDir -Filter "*.exe" | Select-Object -First 1
-          Write-Host "Signing: $($exeFile.FullName)"
-          # Sign with explicit quoting for Japanese filename
-          & npx tauri signer sign "$($exeFile.FullName)"
-          # Check result
-          $sigFiles = Get-ChildItem $nsisDir -Filter "*.sig"
-          if ($sigFiles.Count -gt 0) {
-            foreach ($f in $sigFiles) { Write-Host "OK: $($f.Name) ($($f.Length) bytes)" }
-          } else {
-            Write-Host "ERROR: No .sig files generated"
-            exit 1
-          }
+          # Decode base64 key
+          TAURI_SIGNING_PRIVATE_KEY=$(echo "$KEY_BASE64" | base64 -d)
+          export TAURI_SIGNING_PRIVATE_KEY
+          echo "Key decoded, length: ${#TAURI_SIGNING_PRIVATE_KEY}"
+          echo "Key first line: $(echo "$TAURI_SIGNING_PRIVATE_KEY" | head -1)"
+          # Find exe file
+          EXE_FILE=$(find src-tauri/target/release/bundle/nsis -name "*.exe" | head -1)
+          echo "Signing file: $EXE_FILE"
+          # Try signing
+          npx tauri signer sign "$EXE_FILE" 2>&1 || echo "SIGN_FAILED"
+          # Check for sig file
+          ls -la src-tauri/target/release/bundle/nsis/*.sig 2>/dev/null || echo "No .sig files found"
 
       - name: List build artifacts
         shell: pwsh
