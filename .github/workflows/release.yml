@@ -43,11 +43,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build signed Tauri app
+      - name: Clean previous build artifacts
+        shell: pwsh
+        run: |
+          $bundleDir = "src-tauri/target/release/bundle"
+          if (Test-Path $bundleDir) {
+            Remove-Item "$bundleDir" -Force -Recurse
+            Write-Host "Cleaned entire bundle directory"
+          }
+
+      - name: Build Tauri app
+        run: npx tauri build
+
+      - name: Sign NSIS installer
+        shell: pwsh
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npm run tauri build
+          KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $env:TAURI_SIGNING_PRIVATE_KEY = $env:KEY_BASE64.Trim()
+          $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $env:KEY_PASSWORD
+          $exe = (Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" | Select-Object -First 1).FullName
+          Write-Host "Signing: $exe"
+          & npx tauri signer sign "$exe"
+          Get-ChildItem "src-tauri\target\release\bundle\nsis" | ForEach-Object { Write-Host "$($_.Name) ($($_.Length) bytes)" }
 
       - name: Get version from tag
         id: version
