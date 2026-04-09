@@ -67,6 +67,7 @@ export function UsagePage() {
   const targetMonth = targetDate.getMonth() + 1;
   const isCurrentMonth = monthOffset === 0;
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const dateRange = useMemo(() => {
     if (period === "daily") {
       const lastDay = isCurrentMonth ? now.getDate() : new Date(targetYear, targetMonth, 0).getDate();

@@ -53,10 +53,17 @@ jobs:
           }
 
       - name: Build signed Tauri app
+        shell: pwsh
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --verbose
+        run: |
+          # Normalize key: ensure LF line endings (Windows CRLF can break rsign parsing)
+          $key = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+          $key = $key -replace "`r`n", "`n"
+          $key = $key -replace "`r", "`n"
+          $env:TAURI_SIGNING_PRIVATE_KEY = $key
+          Write-Host "Signing key set (length: $($key.Length), lines: $(($key -split "`n").Count))"
+          npx tauri build
 
       - name: List build artifacts
         shell: pwsh

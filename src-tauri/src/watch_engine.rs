@@ -460,7 +460,7 @@ fn build_csv_from_results(
         std::collections::BTreeMap::new();
 
     for r in results {
-        let row_idx = if r.column_name.contains("row") { 0 } else { 0 }; // Simple: all in row 0
+        let row_idx = 0; // Simple: all results in row 0
         let row = rows.entry(row_idx).or_default();
         let value = r.raw_value.clone();
         row.insert(r.column_name.clone(), value);

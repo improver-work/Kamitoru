@@ -52,7 +52,7 @@ export default function App() {
         unlisten = await listen<{ version: string }>("update-available", (event) => {
           setUpdateAvailable(event.payload);
         });
-      } catch {}
+      } catch { /* update listener setup may fail in non-Tauri env */ }
     })();
     return () => { unlisten?.(); };
   }, []);
@@ -68,12 +68,13 @@ export default function App() {
           try {
             const tmpl = await invoke<Template[]>("fetch_templates");
             queryClient.setQueryData(["templates"], tmpl);
-          } catch {}
+          } catch { /* template prefetch failure is non-critical */ }
         } else if (session.apiKey) {
           setSavedApiKey(session.apiKey);
         }
-      } catch {} finally { setChecking(false); }
+      } catch { /* session check expected to fail when not configured */ } finally { setChecking(false); }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleConnected(session: { apiUrl: string; apiKey: string; templates: Template[] }) {
@@ -88,7 +89,7 @@ export default function App() {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("logout");
       }
-    } catch {}
+    } catch { /* logout may fail if not in Tauri env */ }
     setConnected(false);
     queryClient.clear();
   }
