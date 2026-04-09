@@ -61,33 +61,40 @@ jobs:
           KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
+          exec > sign-debug.log 2>&1
           set -x
-          # Decode base64 key using Node.js (guaranteed available)
+          echo "=== Key Info ==="
           DECODED_KEY=$(node -e "process.stdout.write(Buffer.from(process.env.KEY_BASE64.trim(), 'base64').toString('utf-8'))")
-          echo "Decoded key length: ${#DECODED_KEY}"
+          echo "Decoded length: ${#DECODED_KEY}"
           echo "First line: $(echo "$DECODED_KEY" | head -1)"
-          echo "Line count: $(echo "$DECODED_KEY" | wc -l)"
-          # Write key to temp file
-          KEY_FILE="$RUNNER_TEMP/signing.key"
-          node -e "require('fs').writeFileSync('$KEY_FILE', Buffer.from(process.env.KEY_BASE64.trim(), 'base64'))"
-          echo "Key file size: $(wc -c < "$KEY_FILE")"
-          # Find exe
-          EXE_FILE=$(ls src-tauri/target/release/bundle/nsis/*.exe | head -1)
+          echo "Lines: $(echo "$DECODED_KEY" | wc -l)"
+          echo "=== Find EXE ==="
+          ls -la src-tauri/target/release/bundle/nsis/
+          EXE_FILE=$(ls src-tauri/target/release/bundle/nsis/*.exe 2>/dev/null | head -1)
           echo "EXE: $EXE_FILE"
-          # Method 1: Try with env var
+          echo "=== Method 1: env var ==="
           export TAURI_SIGNING_PRIVATE_KEY="$DECODED_KEY"
           export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$KEY_PASSWORD"
-          echo "=== Attempting tauri signer sign ==="
-          npx tauri signer sign "$EXE_FILE" 2>&1 && echo "SIGN_SUCCESS" || echo "SIGN_FAILED_METHOD1"
-          # Check result
-          echo "=== Files after signing ==="
-          ls -la src-tauri/target/release/bundle/nsis/ 2>&1
-          # Method 2: If no sig, try with --private-key flag
-          if ! ls src-tauri/target/release/bundle/nsis/*.sig 2>/dev/null; then
-            echo "=== Trying with --private-key flag ==="
-            npx tauri signer sign "$EXE_FILE" --private-key "$DECODED_KEY" --password "$KEY_PASSWORD" 2>&1 || echo "SIGN_FAILED_METHOD2"
-            ls -la src-tauri/target/release/bundle/nsis/ 2>&1
-          fi
+          npx tauri signer sign "$EXE_FILE" || true
+          echo "=== After Method 1 ==="
+          ls -la src-tauri/target/release/bundle/nsis/
+          echo "=== Method 2: --private-key flag ==="
+          npx tauri signer sign "$EXE_FILE" --private-key "$DECODED_KEY" --password "$KEY_PASSWORD" || true
+          echo "=== Final state ==="
+          ls -la src-tauri/target/release/bundle/nsis/
+          echo "=== npx tauri --version ==="
+          npx tauri --version || true
+          echo "=== npx tauri signer --help ==="
+          npx tauri signer --help || true
+          echo "=== DONE ==="
+
+      - name: Upload sign debug log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sign-debug-log
+          path: sign-debug.log
+          if-no-files-found: warn
 
       - name: List build artifacts
         shell: pwsh
