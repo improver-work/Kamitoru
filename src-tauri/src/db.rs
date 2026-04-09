@@ -74,8 +74,7 @@ impl Database {
         // Migration: add output_cycle column for existing databases
         let _ = conn.execute("ALTER TABLE profiles ADD COLUMN output_cycle TEXT DEFAULT 'none'", []);
 
-        // Clear any legacy API keys from database (now stored in keyring only)
-        let _ = conn.execute("UPDATE connection SET api_key='' WHERE api_key != ''", []);
+        // Note: API key may be stored in DB as fallback when OS keyring is unavailable
 
         println!("[DB] Tables initialized");
         Ok(())

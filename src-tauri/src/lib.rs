@@ -121,8 +121,13 @@ async fn test_connection(config: ConnectionConfig, state: State<'_, AppState>) -
     let client = ApiClient::new(&config.api_url, &config.api_key);
     match client.test_connection().await {
         Ok(templates) => {
-            state.db.save_connection(&config.api_url, "", "", "", "", "", "")?;
-            let _ = save_api_key_to_keyring(&config.api_key);
+            // Try keyring first; if it fails, save to DB as fallback
+            let keyring_ok = save_api_key_to_keyring(&config.api_key).is_ok();
+            let db_key = if keyring_ok { "" } else {
+                println!("[Connection] Keyring unavailable, saving to DB as fallback");
+                &config.api_key
+            };
+            state.db.save_connection(&config.api_url, db_key, "", "", "", "", "")?;
             *state.api_client.lock().unwrap_or_else(|e| e.into_inner()) = Some(client);
             println!("[Connection] Connected: {} templates", templates.len());
             Ok(ConnectionTestResult { success: true, templates, error: None })
