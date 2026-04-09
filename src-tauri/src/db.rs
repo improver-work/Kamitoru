@@ -19,7 +19,7 @@ impl Database {
     }
 
     fn init_tables(&self) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute_batch("
             CREATE TABLE IF NOT EXISTS connection (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -74,6 +74,9 @@ impl Database {
         // Migration: add output_cycle column for existing databases
         let _ = conn.execute("ALTER TABLE profiles ADD COLUMN output_cycle TEXT DEFAULT 'none'", []);
 
+        // Clear any legacy API keys from database (now stored in keyring only)
+        let _ = conn.execute("UPDATE connection SET api_key='' WHERE api_key != ''", []);
+
         println!("[DB] Tables initialized");
         Ok(())
     }
@@ -82,7 +85,7 @@ impl Database {
 
     pub fn save_connection(&self, api_url: &str, api_key: &str, user_email: &str,
                            tenant_id: &str, tenant_name: &str, supabase_url: &str, supabase_anon_key: &str) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "UPDATE connection SET api_url=?1, api_key=?2, user_email=?3, tenant_id=?4, tenant_name=?5, supabase_url=?6, supabase_anon_key=?7, connected_at=datetime('now') WHERE id=1",
             params![api_url, api_key, user_email, tenant_id, tenant_name, supabase_url, supabase_anon_key],
@@ -91,7 +94,7 @@ impl Database {
     }
 
     pub fn load_connection(&self) -> Result<ConnectionRow, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.query_row(
             "SELECT api_url, api_key, user_email, tenant_id, tenant_name, supabase_url, supabase_anon_key, connected_at FROM connection WHERE id=1",
             [],
@@ -109,7 +112,7 @@ impl Database {
     }
 
     pub fn clear_connection(&self) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "UPDATE connection SET api_url='', api_key='', user_email='', tenant_id='', tenant_name='', connected_at=NULL WHERE id=1",
             [],
@@ -120,7 +123,7 @@ impl Database {
     // ===== Profiles =====
 
     pub fn list_profiles(&self) -> Result<Vec<ProfileRow>, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = conn.prepare(
             "SELECT id, name, template_id, template_name, input_folder, output_folder, processed_folder, csv_encoding, output_cycle, polling_interval_seconds, is_active, created_at, updated_at FROM profiles ORDER BY created_at"
         ).map_err(|e| format!("Query error: {}", e))?;
@@ -145,7 +148,7 @@ impl Database {
     }
 
     pub fn insert_profile(&self, p: &ProfileRow) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "INSERT INTO profiles (id, name, template_id, template_name, input_folder, output_folder, processed_folder, csv_encoding, output_cycle, polling_interval_seconds, is_active, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
             params![p.id, p.name, p.template_id, p.template_name, p.input_folder, p.output_folder, p.processed_folder, p.csv_encoding, p.output_cycle, p.polling_interval_seconds, p.is_active as i32, p.created_at, p.updated_at],
@@ -154,7 +157,7 @@ impl Database {
     }
 
     pub fn update_profile(&self, p: &ProfileRow) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "UPDATE profiles SET name=?2, template_id=?3, template_name=?4, input_folder=?5, output_folder=?6, processed_folder=?7, csv_encoding=?8, output_cycle=?9, polling_interval_seconds=?10, updated_at=?11 WHERE id=?1",
             params![p.id, p.name, p.template_id, p.template_name, p.input_folder, p.output_folder, p.processed_folder, p.csv_encoding, p.output_cycle, p.polling_interval_seconds, p.updated_at],
@@ -163,14 +166,14 @@ impl Database {
     }
 
     pub fn delete_profile(&self, id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute("DELETE FROM profiles WHERE id=?1", params![id])
             .map_err(|e| format!("Delete error: {}", e))?;
         Ok(())
     }
 
     pub fn set_profile_active(&self, id: &str, active: bool) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "UPDATE profiles SET is_active=?2, updated_at=datetime('now') WHERE id=?1",
             params![id, active as i32],
@@ -181,7 +184,7 @@ impl Database {
     // ===== Processing Logs =====
 
     pub fn insert_log(&self, log: &LogInsert) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "INSERT INTO processing_logs (profile_id, profile_name, file_name, status, job_id, result_count, processing_time_ms, error, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
             params![log.profile_id, log.profile_name, log.file_name, log.status, log.job_id, log.result_count, log.processing_time_ms, log.error, log.created_at],
@@ -190,7 +193,7 @@ impl Database {
     }
 
     pub fn list_logs(&self, limit: u32) -> Result<Vec<LogRow>, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = conn.prepare(
             "SELECT id, profile_id, profile_name, file_name, status, job_id, result_count, processing_time_ms, error, created_at FROM processing_logs ORDER BY id DESC LIMIT ?1"
         ).map_err(|e| format!("Query error: {}", e))?;
@@ -213,7 +216,7 @@ impl Database {
 
     /// 指定日数より古い処理ログを削除する
     pub fn delete_old_logs(&self, retention_days: u32) -> Result<u32, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let deleted = conn.execute(
             "DELETE FROM processing_logs WHERE created_at < datetime('now', ?1)",
             params![format!("-{} days", retention_days)],
@@ -226,7 +229,7 @@ impl Database {
 
     /// 処理ログの総件数を取得
     pub fn count_logs(&self) -> Result<u32, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.query_row(
             "SELECT COUNT(*) FROM processing_logs",
             [],

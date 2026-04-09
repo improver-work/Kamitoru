@@ -7,17 +7,14 @@ import { ProfilesPage } from "./components/profiles-page";
 import { LogPage } from "./components/log-page";
 import { UsagePage } from "./components/usage-page";
 import { useTheme } from "./lib/theme";
-import { type Template, type WatchProfile, getProfiles, fetchTemplates } from "./lib/tauri-api";
+import { type Template, type WatchProfile, isTauri, getProfiles, fetchTemplates, checkSavedSession, logout, installUpdate } from "./lib/tauri-api";
 
 export type Page = "dashboard" | "profiles" | "logs" | "usage";
-
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export default function App() {
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [page, setPage] = useState<Page>("dashboard");
-  const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState<{ version: string } | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -61,16 +58,13 @@ export default function App() {
     (async () => {
       try {
         if (!isTauri) { setChecking(false); return; }
-        const { invoke } = await import("@tauri-apps/api/core");
-        const session = await invoke<{ connected: boolean; apiUrl: string; apiKey: string }>("check_saved_session");
+        const session = await checkSavedSession();
         if (session.connected) {
           setConnected(true);
           try {
-            const tmpl = await invoke<Template[]>("fetch_templates");
+            const tmpl = await fetchTemplates();
             queryClient.setQueryData(["templates"], tmpl);
           } catch { /* template prefetch failure is non-critical */ }
-        } else if (session.apiKey) {
-          setSavedApiKey(session.apiKey);
         }
       } catch { /* session check expected to fail when not configured */ } finally { setChecking(false); }
     })();
@@ -85,10 +79,7 @@ export default function App() {
 
   async function handleDisconnect() {
     try {
-      if (isTauri) {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("logout");
-      }
+      await logout();
     } catch { /* logout may fail if not in Tauri env */ }
     setConnected(false);
     queryClient.clear();
@@ -105,8 +96,7 @@ export default function App() {
     setUpdating(true);
     setUpdateError(null);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("install_update");
+      await installUpdate();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("Update failed:", msg);
@@ -127,7 +117,7 @@ export default function App() {
   }
 
   if (!connected) {
-    return <LoginPage onConnected={handleConnected} savedApiKey={savedApiKey} />;
+    return <LoginPage onConnected={handleConnected} />;
   }
 
   return (

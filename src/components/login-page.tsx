@@ -1,18 +1,13 @@
 import { useState } from "react";
 import { APP_CONFIG } from "../lib/config";
+import { type Template, testConnection } from "../lib/tauri-api";
 
 interface LoginPageProps {
-  onConnected: (session: {
-    apiUrl: string; apiKey: string;
-    templates: Array<{ id: string; name: string; description: string; extractionType: string; fieldCount: number; hasTableRegion: boolean }>;
-  }) => void;
-  savedApiKey: string | null;
+  onConnected: (session: { apiUrl: string; apiKey: string; templates: Template[] }) => void;
 }
 
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-export function LoginPage({ onConnected, savedApiKey }: LoginPageProps) {
-  const [apiKey, setApiKey] = useState(savedApiKey ?? "");
+export function LoginPage({ onConnected }: LoginPageProps) {
+  const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,18 +15,7 @@ export function LoginPage({ onConnected, savedApiKey }: LoginPageProps) {
     setLoading(true);
     setError(null);
     try {
-      if (!isTauri) {
-        await new Promise((r) => setTimeout(r, 800));
-        onConnected({ apiUrl: APP_CONFIG.API_URL, apiKey,
-          templates: [{ id: "t1", name: "サンプルテンプレート", description: "", extractionType: "FIELD", fieldCount: 5, hasTableRegion: false }] });
-        return;
-      }
-      const { invoke } = await import("@tauri-apps/api/core");
-      const result = await invoke<{
-        success: boolean;
-        templates: Array<{ id: string; name: string; description: string; extractionType: string; fieldCount: number; hasTableRegion: boolean }>;
-        error: string | null;
-      }>("test_connection", { config: { apiUrl: APP_CONFIG.API_URL, apiKey: apiKey.trim() } });
+      const result = await testConnection({ apiUrl: APP_CONFIG.API_URL, apiKey: apiKey.trim() });
 
       if (result.success) {
         onConnected({ apiUrl: APP_CONFIG.API_URL, apiKey: apiKey.trim(), templates: result.templates });

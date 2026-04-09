@@ -81,8 +81,12 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
   }, []);
 
   async function handleToggle(id: string, active: boolean) {
-    await toggleProfileActive(id, active);
-    onProfilesChanged(profiles.map((p) => p.id === id ? { ...p, isActive: active } : p));
+    try {
+      await toggleProfileActive(id, active);
+      onProfilesChanged(profiles.map((p) => p.id === id ? { ...p, isActive: active } : p));
+    } catch (err) {
+      console.error("Toggle failed:", err);
+    }
   }
 
   if (!connected) {

@@ -23,6 +23,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<ProfileFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function handleCreate() { setForm(EMPTY_FORM); setEditId(null); setMode("create"); }
 
@@ -37,6 +38,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
     try {
       if (mode === "create") {
         const created = await createProfile(form);
@@ -46,12 +48,21 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
         onProfilesChanged(profiles.map((p) => (p.id === editId ? updated : p)));
       }
       setMode("list");
-    } finally { setSaving(false); }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleDelete(id: string) {
-    await deleteProfile(id);
-    onProfilesChanged(profiles.filter((p) => p.id !== id));
+    if (!window.confirm("このプロファイルを削除しますか?")) return;
+    try {
+      await deleteProfile(id);
+      onProfilesChanged(profiles.filter((p) => p.id !== id));
+    } catch (err) {
+      alert("削除に失敗しました: " + (err instanceof Error ? err.message : String(err)));
+    }
   }
 
   function handleTemplateChange(tid: string) {
@@ -243,6 +254,14 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
               onChange={(e) => setForm({ ...form, pollingIntervalSeconds: Number(e.target.value) })}
               className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
+
+          {/* Error */}
+          {saveError && (
+            <div className="rounded-lg px-3 py-2.5 text-sm"
+              style={{ background: "oklch(0.577 0.245 27.325 / 0.1)", color: "var(--destructive)" }}>
+              {saveError}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2 pt-2">

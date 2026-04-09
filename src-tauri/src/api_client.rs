@@ -157,7 +157,7 @@ impl ApiClient {
     /// GET /api/v1/templates
     pub async fn get_templates(&self) -> Result<Vec<Template>, String> {
         let url = self.url("/templates");
-        println!("[API] GET {} (key: {}...)", url, &self.api_key[..std::cmp::min(4, self.api_key.len())]);
+        println!("[API] GET {}", url);
 
         let resp = self
             .client

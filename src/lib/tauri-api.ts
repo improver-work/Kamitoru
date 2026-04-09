@@ -76,7 +76,7 @@ export interface ProfileStats {
 
 // Tauri v2 detection: __TAURI_INTERNALS__ is always present in Tauri WebView
 // regardless of withGlobalTauri setting in tauri.conf.json
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri) {
@@ -115,6 +115,28 @@ const MOCK_LOGS: ProcessingLog[] = [
   { id: 3, profileId: "prof-2", profileName: "納品書自動処理", fileName: "delivery_march.pdf", status: "PARTIAL", jobId: "job-003", resultCount: 5, processingTimeMs: 4100, error: null, createdAt: "2026-04-07T10:32:00" },
   { id: 4, profileId: "prof-1", profileName: "請求書自動処理", fileName: "broken_scan.pdf", status: "FAILED", jobId: "", resultCount: 0, processingTimeMs: 1500, error: "OCR extraction failed", createdAt: "2026-04-07T10:33:00" },
 ];
+
+// --- Session / Auth ---
+
+export interface SavedSession {
+  connected: boolean;
+  apiUrl: string;
+  hasApiKey: boolean;
+}
+
+export async function checkSavedSession(): Promise<SavedSession> {
+  if (!isTauri) return { connected: false, apiUrl: "", hasApiKey: false };
+  return invoke<SavedSession>("check_saved_session");
+}
+
+export async function logout(): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("logout");
+}
+
+export async function installUpdate(): Promise<void> {
+  return invoke<void>("install_update");
+}
 
 // --- Connection ---
 

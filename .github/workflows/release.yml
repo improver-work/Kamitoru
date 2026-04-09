@@ -43,51 +43,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Clean previous build artifacts
-        shell: pwsh
-        run: |
-          $nsisDir = "src-tauri/target/release/bundle/nsis"
-          if (Test-Path $nsisDir) {
-            Remove-Item "$nsisDir/*" -Force -Recurse
-            Write-Host "Cleaned NSIS output directory"
-          }
-
-      - name: Build Tauri app
-        run: npx tauri build
-
-      - name: Sign NSIS installer
-        shell: pwsh
+      - name: Build signed Tauri app
         env:
-          KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          # Method: pass the raw base64 string from .key file as-is
-          $env:TAURI_SIGNING_PRIVATE_KEY = $env:KEY_BASE64.Trim()
-          $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $env:KEY_PASSWORD
-          Write-Host "Key set (raw base64, length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length))"
-          $exe = (Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" | Select-Object -First 1).FullName
-          Write-Host "Signing: $exe"
-          & npx tauri signer sign "$exe"
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Method 1 failed. Trying method 2: key data only..."
-            # Decode base64 and extract just the key line (2nd line)
-            $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:KEY_BASE64.Trim()))
-            $lines = $decoded -split "`n"
-            $keyLine = ($lines | Where-Object { $_ -match '^RW' } | Select-Object -First 1).Trim()
-            Write-Host "Key line: $($keyLine.Substring(0,20))... (length: $($keyLine.Length))"
-            $env:TAURI_SIGNING_PRIVATE_KEY = $keyLine
-            & npx tauri signer sign "$exe"
-          }
-          Write-Host "=== Result ==="
-          Get-ChildItem "src-tauri\target\release\bundle\nsis" | ForEach-Object { Write-Host "$($_.Name) ($($_.Length) bytes)" }
-
-      - name: List build artifacts
-        shell: pwsh
-        run: |
-          $nsisDir = "src-tauri/target/release/bundle/nsis"
-          if (Test-Path $nsisDir) {
-            Get-ChildItem $nsisDir | ForEach-Object { Write-Host "$($_.Name) ($($_.Length) bytes)" }
-          }
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build
 
       - name: Get version from tag
         id: version

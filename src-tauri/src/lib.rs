@@ -24,7 +24,7 @@ pub struct AppState {
 }
 
 fn get_client(state: &AppState) -> Result<ApiClient, String> {
-    state.api_client.lock().unwrap().as_ref().cloned().ok_or_else(|| "API未接続です".to_string())
+    state.api_client.lock().unwrap_or_else(|e| e.into_inner()).as_ref().cloned().ok_or_else(|| "API未接続です".to_string())
 }
 
 // ============================================================
@@ -114,7 +114,7 @@ struct ConnectionTestResult { success: bool, templates: Vec<Template>, error: Op
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SavedSession { connected: bool, api_url: String, api_key: String }
+struct SavedSession { connected: bool, api_url: String, has_api_key: bool }
 
 #[tauri::command]
 async fn test_connection(config: ConnectionConfig, state: State<'_, AppState>) -> Result<ConnectionTestResult, String> {
@@ -123,7 +123,7 @@ async fn test_connection(config: ConnectionConfig, state: State<'_, AppState>) -
         Ok(templates) => {
             state.db.save_connection(&config.api_url, "", "", "", "", "", "")?;
             let _ = save_api_key_to_keyring(&config.api_key);
-            *state.api_client.lock().unwrap() = Some(client);
+            *state.api_client.lock().unwrap_or_else(|e| e.into_inner()) = Some(client);
             println!("[Connection] Connected: {} templates", templates.len());
             Ok(ConnectionTestResult { success: true, templates, error: None })
         }
@@ -138,27 +138,27 @@ async fn check_saved_session(state: State<'_, AppState>) -> Result<SavedSession,
     // APIキーはkeyringから優先取得、なければDBのフォールバック
     let api_key = load_api_key_from_keyring().unwrap_or(conn.api_key);
     if api_url.is_empty() || api_key.is_empty() {
-        return Ok(SavedSession { connected: false, api_url: String::new(), api_key: String::new() });
+        return Ok(SavedSession { connected: false, api_url: String::new(), has_api_key: false });
     }
     let client = ApiClient::new(&api_url, &api_key);
     match client.get_templates().await {
         Ok(_) => {
-            *state.api_client.lock().unwrap() = Some(client);
+            *state.api_client.lock().unwrap_or_else(|e| e.into_inner()) = Some(client);
             println!("[Connection] Auto-reconnected");
-            Ok(SavedSession { connected: true, api_url, api_key })
+            Ok(SavedSession { connected: true, api_url, has_api_key: !api_key.is_empty() })
         }
         Err(e) => {
             println!("[Connection] Auto-reconnect failed: {}", e);
-            Ok(SavedSession { connected: false, api_url, api_key })
+            Ok(SavedSession { connected: false, api_url, has_api_key: !api_key.is_empty() })
         }
     }
 }
 
 #[tauri::command]
 fn logout(state: State<'_, AppState>) -> Result<(), String> {
-    let mut flags = state.stop_flags.lock().unwrap();
-    for (_, flag) in flags.drain() { *flag.lock().unwrap() = true; }
-    *state.api_client.lock().unwrap() = None;
+    let mut flags = state.stop_flags.lock().unwrap_or_else(|e| e.into_inner());
+    for (_, flag) in flags.drain() { *flag.lock().unwrap_or_else(|e| e.into_inner()) = true; }
+    *state.api_client.lock().unwrap_or_else(|e| e.into_inner()) = None;
     state.db.clear_connection()?;
     delete_api_key_from_keyring();
     println!("[Connection] Disconnected");
@@ -192,6 +192,7 @@ fn get_profiles(state: State<'_, AppState>) -> Result<Vec<WatchProfile>, String>
 
 #[tauri::command]
 fn create_profile(data: ProfileFormData, state: State<'_, AppState>) -> Result<WatchProfile, String> {
+    validate_profile(&data)?;
     let now = chrono::Local::now().to_rfc3339();
     let row = ProfileRow {
         id: format!("prof_{}", chrono::Local::now().timestamp_millis()),
@@ -207,6 +208,7 @@ fn create_profile(data: ProfileFormData, state: State<'_, AppState>) -> Result<W
 
 #[tauri::command]
 fn update_profile(id: String, data: ProfileFormData, state: State<'_, AppState>) -> Result<WatchProfile, String> {
+    validate_profile(&data)?;
     let now = chrono::Local::now().to_rfc3339();
     let row = ProfileRow {
         id: id.clone(), name: data.name, template_id: data.template_id, template_name: data.template_name,
@@ -221,7 +223,7 @@ fn update_profile(id: String, data: ProfileFormData, state: State<'_, AppState>)
 
 #[tauri::command]
 fn delete_profile(id: String, state: State<'_, AppState>) -> Result<(), String> {
-    if let Some(flag) = state.stop_flags.lock().unwrap().remove(&id) { *flag.lock().unwrap() = true; }
+    if let Some(flag) = state.stop_flags.lock().unwrap_or_else(|e| e.into_inner()).remove(&id) { *flag.lock().unwrap_or_else(|e| e.into_inner()) = true; }
     state.db.delete_profile(&id)
 }
 
@@ -229,17 +231,47 @@ fn delete_profile(id: String, state: State<'_, AppState>) -> Result<(), String> 
 fn toggle_profile_active(id: String, active: bool, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     state.db.set_profile_active(&id, active)?;
     let profile = state.db.list_profiles()?.into_iter().find(|p| p.id == id).ok_or("見つかりません")?;
-    let mut stop_flags = state.stop_flags.lock().unwrap();
+    let mut stop_flags = state.stop_flags.lock().unwrap_or_else(|e| e.into_inner());
     if active {
         let client = get_client(&state)?;
-        if let Some(old) = stop_flags.remove(&id) { *old.lock().unwrap() = true; }
+        if let Some(old) = stop_flags.remove(&id) { *old.lock().unwrap_or_else(|e| e.into_inner()) = true; }
         let flag = Arc::new(Mutex::new(false));
         stop_flags.insert(id.clone(), flag.clone());
         watch_engine::start_watcher(app, profile.id, profile.name, profile.template_id,
             profile.input_folder, profile.output_folder, profile.processed_folder,
             profile.csv_encoding, profile.output_cycle, profile.polling_interval_seconds, client, flag);
     } else {
-        if let Some(flag) = stop_flags.remove(&id) { *flag.lock().unwrap() = true; }
+        if let Some(flag) = stop_flags.remove(&id) { *flag.lock().unwrap_or_else(|e| e.into_inner()) = true; }
+    }
+    Ok(())
+}
+
+// ============================================================
+// File Validation Helpers
+// ============================================================
+
+const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024; // 100MB
+
+/// ファイルパスが.pdf拡張子かどうかを検証
+fn validate_pdf_path(path: &std::path::Path) -> Result<(), String> {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("pdf") => Ok(()),
+        _ => Err("PDFファイルのみ対応しています".to_string()),
+    }
+}
+
+/// プロファイル入力データのバリデーション
+fn validate_profile(data: &ProfileFormData) -> Result<(), String> {
+    if data.name.trim().is_empty() { return Err("プロファイル名は必須です".to_string()); }
+    if data.name.len() > 100 { return Err("プロファイル名は100文字以内です".to_string()); }
+    if data.input_folder.trim().is_empty() { return Err("入力フォルダは必須です".to_string()); }
+    if data.output_folder.trim().is_empty() { return Err("出力フォルダは必須です".to_string()); }
+    if data.processed_folder.trim().is_empty() { return Err("処理済みフォルダは必須です".to_string()); }
+    if data.polling_interval_seconds < 1 || data.polling_interval_seconds > 3600 {
+        return Err("ポーリング間隔は1〜3600秒です".to_string());
+    }
+    if !["utf-8-bom", "utf-8", "shift_jis"].contains(&data.csv_encoding.as_str()) {
+        return Err("無効なCSVエンコーディングです".to_string());
     }
     Ok(())
 }
@@ -254,6 +286,11 @@ async fn extract_file(req: serde_json::Value, state: State<'_, AppState>) -> Res
     let fp = req["filePath"].as_str().ok_or("filePath required")?.to_string();
     let client = get_client(&state)?;
     let path = PathBuf::from(&fp);
+    validate_pdf_path(&path)?;
+    let meta = fs::metadata(&path).map_err(|e| format!("メタデータ取得エラー: {}", e))?;
+    if meta.len() > MAX_FILE_SIZE {
+        return Err(format!("ファイルサイズが上限(100MB)を超えています: {}MB", meta.len() / 1024 / 1024));
+    }
     let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
     let b64 = base64::engine::general_purpose::STANDARD.encode(&fs::read(&path).map_err(|e| format!("読込エラー: {}", e))?);
     match client.extract(&tid, &b64, &name).await {
@@ -273,6 +310,11 @@ async fn batch_extract(req: serde_json::Value, state: State<'_, AppState>) -> Re
     let mut files = Vec::new();
     for p in &fps {
         let path = PathBuf::from(p);
+        validate_pdf_path(&path)?;
+        let meta = fs::metadata(&path).map_err(|e| format!("メタデータ取得エラー: {}", e))?;
+        if meta.len() > MAX_FILE_SIZE {
+            return Err(format!("ファイルサイズが上限(100MB)を超えています: {}MB ({}) ", meta.len() / 1024 / 1024, p));
+        }
         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
         let b64 = base64::engine::general_purpose::STANDARD.encode(&fs::read(&path).map_err(|e| format!("読込エラー: {}", e))?);
         files.push(BatchFile { pdf_base64: b64, file_name: name });
@@ -312,6 +354,9 @@ fn get_processing_logs(limit: Option<u32>, state: State<'_, AppState>) -> Result
 
 #[tauri::command]
 fn move_file(source: String, destination: String) -> Result<(), String> {
+    if !std::path::Path::new(&source).exists() {
+        return Err("ソースファイルが存在しません".to_string());
+    }
     let dest = PathBuf::from(&destination);
     let final_path = if dest.exists() {
         let s = dest.file_stem().unwrap_or_default().to_string_lossy();
@@ -463,10 +508,10 @@ pub fn run() {
                                     for profile in profiles {
                                         if !profile.is_active {
                                             let _ = state.db.set_profile_active(&profile.id, true);
-                                            if let Some(client) = state.api_client.lock().unwrap().as_ref().cloned() {
-                                                let mut flags = state.stop_flags.lock().unwrap();
+                                            if let Some(client) = state.api_client.lock().unwrap_or_else(|e| e.into_inner()).as_ref().cloned() {
+                                                let mut flags = state.stop_flags.lock().unwrap_or_else(|e| e.into_inner());
                                                 if let Some(old) = flags.remove(&profile.id) {
-                                                    *old.lock().unwrap() = true;
+                                                    *old.lock().unwrap_or_else(|e| e.into_inner()) = true;
                                                 }
                                                 let flag = Arc::new(Mutex::new(false));
                                                 flags.insert(profile.id.clone(), flag.clone());
@@ -486,9 +531,9 @@ pub fn run() {
                         }
                         "stop_all" => {
                             if let Some(state) = app.try_state::<AppState>() {
-                                let mut flags = state.stop_flags.lock().unwrap();
+                                let mut flags = state.stop_flags.lock().unwrap_or_else(|e| e.into_inner());
                                 for (_, flag) in flags.drain() {
-                                    *flag.lock().unwrap() = true;
+                                    *flag.lock().unwrap_or_else(|e| e.into_inner()) = true;
                                 }
                                 if let Ok(profiles) = state.db.list_profiles() {
                                     for p in profiles {
