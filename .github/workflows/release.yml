@@ -61,14 +61,19 @@ jobs:
           KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          # Decode base64 key
-          export TAURI_SIGNING_PRIVATE_KEY=$(node -e "process.stdout.write(Buffer.from(process.env.KEY_BASE64.trim(), 'base64').toString('utf-8'))")
-          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$KEY_PASSWORD"
-          echo "Key decoded (${#TAURI_SIGNING_PRIVATE_KEY} chars)"
-          # Find and sign
           EXE_FILE=$(ls src-tauri/target/release/bundle/nsis/*.exe | head -1)
           echo "Signing: $EXE_FILE"
-          npx tauri signer sign "$EXE_FILE"
+          node << 'NODEEOF'
+            const { execSync } = require("child_process");
+            const fs = require("fs");
+            const decoded = Buffer.from(process.env.KEY_BASE64.trim(), "base64").toString("utf-8");
+            console.log("Key length:", decoded.length, "Has newline:", decoded.includes("\n"));
+            const env = { ...process.env, TAURI_SIGNING_PRIVATE_KEY: decoded, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.KEY_PASSWORD || "" };
+            const files = fs.readdirSync("src-tauri/target/release/bundle/nsis").filter(f => f.endsWith(".exe"));
+            const exe = "src-tauri/target/release/bundle/nsis/" + files[0];
+            console.log("Signing:", exe);
+            execSync("npx tauri signer sign \"" + exe + "\"", { stdio: "inherit", env });
+          NODEEOF
           echo "=== Result ==="
           ls -la src-tauri/target/release/bundle/nsis/
 
