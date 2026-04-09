@@ -61,40 +61,16 @@ jobs:
           KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          exec > sign-debug.log 2>&1
-          set -x
-          echo "=== Key Info ==="
-          DECODED_KEY=$(node -e "process.stdout.write(Buffer.from(process.env.KEY_BASE64.trim(), 'base64').toString('utf-8'))")
-          echo "Decoded length: ${#DECODED_KEY}"
-          echo "First line: $(echo "$DECODED_KEY" | head -1)"
-          echo "Lines: $(echo "$DECODED_KEY" | wc -l)"
-          echo "=== Find EXE ==="
-          ls -la src-tauri/target/release/bundle/nsis/
-          EXE_FILE=$(ls src-tauri/target/release/bundle/nsis/*.exe 2>/dev/null | head -1)
-          echo "EXE: $EXE_FILE"
-          echo "=== Method 1: env var ==="
-          export TAURI_SIGNING_PRIVATE_KEY="$DECODED_KEY"
+          # Decode base64 key
+          export TAURI_SIGNING_PRIVATE_KEY=$(node -e "process.stdout.write(Buffer.from(process.env.KEY_BASE64.trim(), 'base64').toString('utf-8'))")
           export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$KEY_PASSWORD"
-          npx tauri signer sign "$EXE_FILE" || true
-          echo "=== After Method 1 ==="
+          echo "Key decoded (${#TAURI_SIGNING_PRIVATE_KEY} chars)"
+          # Find and sign
+          EXE_FILE=$(ls src-tauri/target/release/bundle/nsis/*.exe | head -1)
+          echo "Signing: $EXE_FILE"
+          npx tauri signer sign "$EXE_FILE"
+          echo "=== Result ==="
           ls -la src-tauri/target/release/bundle/nsis/
-          echo "=== Method 2: --private-key flag ==="
-          npx tauri signer sign "$EXE_FILE" --private-key "$DECODED_KEY" --password "$KEY_PASSWORD" || true
-          echo "=== Final state ==="
-          ls -la src-tauri/target/release/bundle/nsis/
-          echo "=== npx tauri --version ==="
-          npx tauri --version || true
-          echo "=== npx tauri signer --help ==="
-          npx tauri signer --help || true
-          echo "=== DONE ==="
-
-      - name: Upload sign debug log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sign-debug-log
-          path: sign-debug.log
-          if-no-files-found: warn
 
       - name: List build artifacts
         shell: pwsh
