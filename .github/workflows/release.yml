@@ -58,29 +58,27 @@ jobs:
       - name: Sign NSIS installer
         shell: pwsh
         env:
-          TAURI_SIGNING_PRIVATE_KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          # Decode base64 key
-          $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:TAURI_SIGNING_PRIVATE_KEY_BASE64.Trim()))
-          # Write key to temp file (tauri signer reads from file or env)
-          $keyFile = "$env:RUNNER_TEMP\signing.key"
-          [System.IO.File]::WriteAllText($keyFile, $decoded, [System.Text.UTF8Encoding]::new($false))
-          Write-Host "Key file: $keyFile ($(( Get-Item $keyFile).Length) bytes)"
-          # Find the exe
-          $nsisDir = "src-tauri/target/release/bundle/nsis"
-          $exeFile = Get-ChildItem $nsisDir -Filter "*.exe" | Select-Object -First 1
-          if (-not $exeFile) { Write-Error "No exe found"; exit 1 }
-          Write-Host "Signing: $($exeFile.Name)"
-          # Sign using tauri signer
+          # Decode base64 key to raw text
+          $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:KEY_BASE64.Trim()))
+          Write-Host "Key decoded (length: $($decoded.Length), lines: $(($decoded -split "`n").Count))"
+          # Set env vars for tauri signer
           $env:TAURI_SIGNING_PRIVATE_KEY = $decoded
-          npx tauri signer sign $exeFile.FullName -p $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-          # Verify sig file was created
-          $sigFile = "$($exeFile.FullName).sig"
-          if (Test-Path $sigFile) {
-            Write-Host "Signature created: $sigFile ($((Get-Item $sigFile).Length) bytes)"
+          $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $env:KEY_PASSWORD
+          # Find exe
+          $nsisDir = "src-tauri\target\release\bundle\nsis"
+          $exeFile = Get-ChildItem $nsisDir -Filter "*.exe" | Select-Object -First 1
+          Write-Host "Signing: $($exeFile.FullName)"
+          # Sign with explicit quoting for Japanese filename
+          & npx tauri signer sign "$($exeFile.FullName)"
+          # Check result
+          $sigFiles = Get-ChildItem $nsisDir -Filter "*.sig"
+          if ($sigFiles.Count -gt 0) {
+            foreach ($f in $sigFiles) { Write-Host "OK: $($f.Name) ($($f.Length) bytes)" }
           } else {
-            Write-Error "Signature file NOT created"
+            Write-Host "ERROR: No .sig files generated"
             exit 1
           }
 
