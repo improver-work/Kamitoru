@@ -52,24 +52,6 @@ jobs:
             Write-Host "Cleaned NSIS output directory"
           }
 
-      - name: Verify signing keys
-        shell: pwsh
-        run: |
-          if ($env:TAURI_SIGNING_PRIVATE_KEY) {
-            Write-Host "TAURI_SIGNING_PRIVATE_KEY is set (length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length))"
-            Write-Host "Key starts with: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(20, $env:TAURI_SIGNING_PRIVATE_KEY.Length)))..."
-          } else {
-            Write-Host "ERROR: TAURI_SIGNING_PRIVATE_KEY is NOT set"
-          }
-          if ($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ne $null) {
-            Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set (length: $($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD.Length))"
-          } else {
-            Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is NOT set (will use empty password)"
-          }
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
       - name: Build signed Tauri app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -82,14 +64,6 @@ jobs:
           $nsisDir = "src-tauri/target/release/bundle/nsis"
           if (Test-Path $nsisDir) {
             Get-ChildItem $nsisDir | ForEach-Object { Write-Host "$($_.Name) ($($_.Length) bytes)" }
-            $sigFiles = Get-ChildItem $nsisDir -Filter "*.sig"
-            if ($sigFiles.Count -eq 0) {
-              Write-Host "WARNING: No .sig files found - signing may have failed"
-            } else {
-              Write-Host "Signature files found: $($sigFiles.Count)"
-            }
-          } else {
-            Write-Host "WARNING: NSIS directory not found"
           }
 
       - name: Get version from tag
