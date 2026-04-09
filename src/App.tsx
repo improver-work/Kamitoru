@@ -20,6 +20,7 @@ export default function App() {
   const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState<{ version: string } | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const themeCtx = useTheme();
   const queryClient = useQueryClient();
 
@@ -101,11 +102,14 @@ export default function App() {
   async function handleInstallUpdate() {
     if (!isTauri || updating) return;
     setUpdating(true);
+    setUpdateError(null);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("install_update");
     } catch (e) {
-      console.error("Update failed:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Update failed:", msg);
+      setUpdateError(msg);
       setUpdating(false);
     }
   }
@@ -133,19 +137,24 @@ export default function App() {
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* 更新通知バナー */}
         {updateAvailable && (
-          <div className="flex items-center justify-between px-4 py-2 text-sm" style={{ background: "oklch(0.488 0.243 264.376 / 0.1)", borderBottom: "1px solid oklch(0.488 0.243 264.376 / 0.2)" }}>
-            <span>
-              <span className="font-semibold" style={{ color: "oklch(0.488 0.243 264.376)" }}>v{updateAvailable.version}</span>
-              <span style={{ color: "var(--muted-foreground)" }}> が利用可能です</span>
-            </span>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setUpdateAvailable(null)} className="rounded px-2 py-1 text-xs" style={{ color: "var(--muted-foreground)" }}>後で</button>
-              <button onClick={handleInstallUpdate} disabled={updating}
-                className="rounded-md px-3 py-1 text-xs font-medium text-white transition"
-                style={{ background: "oklch(0.488 0.243 264.376)" }}>
-                {updating ? "更新中..." : "今すぐ更新"}
-              </button>
+          <div className="px-4 py-2 text-sm" style={{ background: updateError ? "oklch(0.577 0.245 27.325 / 0.1)" : "oklch(0.488 0.243 264.376 / 0.1)", borderBottom: `1px solid ${updateError ? "oklch(0.577 0.245 27.325 / 0.2)" : "oklch(0.488 0.243 264.376 / 0.2)"}` }}>
+            <div className="flex items-center justify-between">
+              <span>
+                <span className="font-semibold" style={{ color: "oklch(0.488 0.243 264.376)" }}>v{updateAvailable.version}</span>
+                <span style={{ color: "var(--muted-foreground)" }}> が利用可能です</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setUpdateAvailable(null); setUpdateError(null); }} className="rounded px-2 py-1 text-xs" style={{ color: "var(--muted-foreground)" }}>後で</button>
+                <button onClick={handleInstallUpdate} disabled={updating}
+                  className="rounded-md px-3 py-1 text-xs font-medium text-white transition"
+                  style={{ background: "oklch(0.488 0.243 264.376)" }}>
+                  {updating ? "更新中..." : updateError ? "再試行" : "今すぐ更新"}
+                </button>
+              </div>
             </div>
+            {updateError && (
+              <p className="mt-1 text-[11px]" style={{ color: "var(--destructive)" }}>更新エラー: {updateError}</p>
+            )}
           </div>
         )}
         <div className="page-enter flex-1 overflow-hidden">
