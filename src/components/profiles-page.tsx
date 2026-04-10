@@ -24,6 +24,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
   const [form, setForm] = useState<ProfileFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   function handleCreate() { setForm(EMPTY_FORM); setEditId(null); setMode("create"); }
 
@@ -57,11 +58,14 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
 
   async function handleDelete(id: string) {
     if (!window.confirm("この設定を削除しますか?")) return;
+    setDeleting(id);
     try {
       await deleteProfile(id);
       onProfilesChanged(profiles.filter((p) => p.id !== id));
     } catch (err) {
       alert("削除に失敗しました: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -145,8 +149,15 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
                   <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
                     <button onClick={() => handleEdit(p)} className="rounded-lg px-2.5 py-1 text-xs font-medium"
                       style={{ color: "var(--muted-foreground)" }}>編集</button>
-                    <button onClick={() => handleDelete(p.id)} className="rounded-lg px-2.5 py-1 text-xs font-medium"
-                      style={{ color: "var(--destructive)" }}>削除</button>
+                    <button onClick={() => handleDelete(p.id)} disabled={deleting === p.id} className="rounded-lg px-2.5 py-1 text-xs font-medium disabled:opacity-50"
+                      style={{ color: "var(--destructive)" }}>
+                      {deleting === p.id ? (
+                        <span className="flex items-center gap-1">
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          削除中
+                        </span>
+                      ) : "削除"}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -268,7 +279,12 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
             <button onClick={handleSave} disabled={!isValid || saving}
               className="flex-1 rounded-lg py-2.5 text-sm font-medium transition disabled:opacity-50"
               style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-              {saving ? "保存中..." : mode === "create" ? "作成" : "更新"}
+              {saving ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  保存中...
+                </span>
+              ) : mode === "create" ? "作成" : "更新"}
             </button>
             <button onClick={() => setMode("list")}
               className="rounded-lg border px-5 py-2.5 text-sm font-medium"

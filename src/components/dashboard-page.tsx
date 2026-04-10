@@ -86,6 +86,16 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
     onProfilesChanged(profiles.map((p) => ({ ...p, isActive: false })));
   }
 
+  function getEventStep(eventType: string): { label: string; color: string } {
+    switch (eventType) {
+      case "file_detected": return { label: "検出", color: "#f59e0b" };
+      case "processing": return { label: "処理中", color: "#6366f1" };
+      case "completed": return { label: "完了", color: "#22c55e" };
+      case "error": return { label: "エラー", color: "var(--destructive)" };
+      default: return { label: "", color: "var(--muted-foreground)" };
+    }
+  }
+
   function getLastProcessedLabel(profileId: string): string | null {
     const log = recentLogs.find((l) => l.profileId === profileId);
     if (!log) return null;
@@ -116,6 +126,65 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
         <h1 className="text-lg font-semibold tracking-tight">ダッシュボード</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>自動処理の状態</p>
       </div>
+
+      {/* ステータスバナー */}
+      {profiles.length > 0 && (() => {
+        let statusTitle: string;
+        let statusDetail: string;
+        let statusColor: string;
+        let statusBannerBg: string;
+        let statusBannerBorder: string;
+        let statusDotClass: string;
+
+        if (activeCount > 0 && todayErrors === 0) {
+          statusTitle = "正常に稼働しています";
+          const latestLog = recentLogs[0];
+          if (latestLog) {
+            const diff = Date.now() - new Date(latestLog.createdAt).getTime();
+            const minutes = Math.floor(diff / 60000);
+            let relative: string;
+            if (minutes < 1) relative = "たった今";
+            else if (minutes < 60) relative = `${minutes}分前`;
+            else if (minutes < 1440) relative = `${Math.floor(minutes / 60)}時間前`;
+            else relative = `${Math.floor(minutes / 1440)}日前`;
+            statusDetail = `最後の処理: ${relative}`;
+          } else {
+            statusDetail = "フォルダを監視中です";
+          }
+          statusColor = "oklch(0.6 0.15 155)";
+          statusBannerBg = "oklch(0.6 0.15 155 / 0.05)";
+          statusBannerBorder = "oklch(0.6 0.15 155 / 0.2)";
+          statusDotClass = "bg-emerald-500 animate-pulse-dot";
+        } else if (activeCount > 0 && todayErrors > 0) {
+          statusTitle = "稼働中ですが、エラーがあります";
+          statusDetail = `今日 ${todayErrors}件のエラーが発生しています。処理履歴を確認してください`;
+          statusColor = "#f59e0b";
+          statusBannerBg = "oklch(0.75 0.15 85 / 0.05)";
+          statusBannerBorder = "oklch(0.75 0.15 85 / 0.2)";
+          statusDotClass = "bg-amber-500";
+        } else {
+          statusTitle = "すべて停止中です";
+          statusDetail = "設定を有効にして監視を開始してください";
+          statusColor = "var(--muted-foreground)";
+          statusBannerBg = "var(--secondary)";
+          statusBannerBorder = "var(--border)";
+          statusDotClass = "bg-gray-400";
+        }
+
+        return (
+          <div className="mb-5 rounded-xl border p-4" style={{
+            background: statusBannerBg, borderColor: statusBannerBorder
+          }}>
+            <div className="flex items-center gap-3">
+              <div className={`h-3 w-3 rounded-full ${statusDotClass}`} />
+              <div>
+                <p className="text-sm font-semibold" style={{ color: statusColor }}>{statusTitle}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>{statusDetail}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Stats */}
       <div className="mb-5 grid grid-cols-4 gap-3">
@@ -235,14 +304,13 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
           </div>
           <div className="divide-y rounded-xl border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
             {liveEvents.slice(0, 10).map((evt, i) => {
-              const dotColor =
-                evt.eventType === "completed" ? "bg-emerald-500"
-                : evt.eventType === "error" ? "bg-red-500"
-                : evt.eventType === "processing" ? "bg-blue-500 animate-pulse-dot"
-                : "bg-amber-500";
+              const step = getEventStep(evt.eventType);
               return (
                 <div key={`${evt.fileName}-${i}`} className="flex items-center gap-3 px-4 py-2.5">
-                  <div className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                  <span className="w-10 text-center text-[10px] font-bold rounded-full px-1.5 py-0.5"
+                    style={{ background: step.color + "20", color: step.color }}>
+                    {step.label}
+                  </span>
                   <span className="flex-1 truncate text-sm">{evt.message}</span>
                   {evt.processingTimeMs && (
                     <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>{(evt.processingTimeMs / 1000).toFixed(1)}s</span>
@@ -251,6 +319,19 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* 月次サマリー */}
+      {monthProcessed > 0 && (
+        <div className="mt-5 mb-5 rounded-xl border p-4" style={{ background: "oklch(0.6 0.15 155 / 0.05)", borderColor: "oklch(0.6 0.15 155 / 0.2)" }}>
+          <p className="text-sm font-semibold" style={{ color: "oklch(0.6 0.15 155)" }}>
+            今月の成果
+          </p>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            {currentMonth.replace("-", "年")}月: {monthProcessed}件の帳票を自動処理しました。
+            {monthProcessed >= 10 && ` 手作業の場合、約${Math.round(monthProcessed * 3)}分に相当します。`}
+          </p>
         </div>
       )}
 

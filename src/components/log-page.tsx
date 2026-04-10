@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { type WatchProfile, type ProcessingLog, getProcessingLogs } from "../lib/tauri-api";
 
+function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-lg ${className}`} style={{ background: "var(--secondary)" }} />;
+}
+
 interface LogPageProps { profiles: WatchProfile[]; }
 
 const STATUS_CFG: Record<string, { label: string; bg: string; fg: string }> = {
@@ -12,13 +16,17 @@ const STATUS_CFG: Record<string, { label: string; bg: string; fg: string }> = {
 
 export function LogPage({ profiles }: LogPageProps) {
   const [logs, setLogs] = useState<ProcessingLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [profileFilter, setProfileFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<"24h" | "7d" | "30d" | "all">("all");
   const [selectedLog, setSelectedLog] = useState<ProcessingLog | null>(null);
 
-  useEffect(() => { void getProcessingLogs(100).then(setLogs).catch(() => {}); }, []);
+  useEffect(() => {
+    setLoading(true);
+    void getProcessingLogs(100).then(setLogs).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
   const filtered = logs
     .filter((l) => statusFilter === "all" || l.status === statusFilter)
@@ -111,7 +119,22 @@ export function LogPage({ profiles }: LogPageProps) {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <tr><td colSpan={6} className="p-0">
+                <div className="space-y-0">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 border-t px-4 py-3" style={{ borderColor: "var(--border)" }}>
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-3 w-32" />
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-5 w-12 rounded-full" />
+                      <Skeleton className="ml-auto h-3 w-8" />
+                      <Skeleton className="h-3 w-10" />
+                    </div>
+                  ))}
+                </div>
+              </td></tr>
+            ) : filtered.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-10 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>ログがありません</td></tr>
             ) : filtered.map((log) => {
               const cfg = STATUS_CFG[log.status] ?? STATUS_CFG.SKIPPED;
