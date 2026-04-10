@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import type { Page } from "../App";
 import { type WatchProfile, type Template, type ProcessingLog, type AiUsageResponse, toggleProfileActive, getProcessingLogs, getAiUsage } from "../lib/tauri-api";
 
@@ -137,9 +137,21 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
         </div>
         {templates.length === 0 ? (
           <div className="rounded-xl border p-6 text-center" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-              {loadingTemplates ? "テンプレートを取得中..." : "テンプレートがありません。Web管理画面でテンプレートを作成してください。"}
-            </p>
+            {loadingTemplates ? (
+              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>テンプレートを取得中...</p>
+            ) : (
+              <>
+                <p className="text-sm font-medium mb-1">帳票の種類がまだ登録されていません</p>
+                <p className="text-xs mb-3" style={{ color: "var(--muted-foreground)" }}>
+                  Web管理画面で帳票テンプレートを作成すると、ここに表示されます
+                </p>
+                <button onClick={() => void onRefreshTemplates()} disabled={loadingTemplates}
+                  className="rounded-lg px-4 py-1.5 text-xs font-medium transition"
+                  style={{ background: "var(--secondary)", color: "var(--foreground)" }}>
+                  再読み込み
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -174,10 +186,42 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
       {/* Profile Cards */}
       {profiles.length === 0 ? (
         <div className="rounded-xl p-8 text-center border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-          <p className="mb-3 text-sm" style={{ color: "var(--muted-foreground)" }}>自動処理の設定がありません</p>
-          <button onClick={() => onNavigate("profiles")} className="rounded-lg px-4 py-2 text-sm font-medium" style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-            設定を作成
-          </button>
+          <div className="mx-auto max-w-md">
+            <h3 className="text-base font-semibold mb-2">自動処理の設定を作成しましょう</h3>
+            <p className="text-sm mb-6" style={{ color: "var(--muted-foreground)" }}>
+              約2分で設定が完了します
+            </p>
+
+            <div className="flex items-center justify-center gap-4 mb-6">
+              {[
+                { step: "1", title: "フォルダにPDFを入れる", desc: "スキャンしたPDFを指定フォルダに保存" },
+                { step: "2", title: "自動で読み取り", desc: "AIが帳票データを抽出" },
+                { step: "3", title: "CSVで出力", desc: "結果がCSVファイルとして保存" },
+              ].map((item, i) => (
+                <React.Fragment key={item.step}>
+                  <div className="flex flex-col items-center text-center w-28">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold mb-2"
+                      style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
+                      {item.step}
+                    </div>
+                    <p className="text-xs font-medium">{item.title}</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>{item.desc}</p>
+                  </div>
+                  {i < 2 && (
+                    <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--muted-foreground)" }}>
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            <button onClick={() => onNavigate("profiles")}
+              className="rounded-lg px-6 py-2.5 text-sm font-medium"
+              style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
+              設定を作成する
+            </button>
+          </div>
         </div>
       ) : (
         <>

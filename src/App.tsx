@@ -6,6 +6,7 @@ import { DashboardPage } from "./components/dashboard-page";
 import { ProfilesPage } from "./components/profiles-page";
 import { LogPage } from "./components/log-page";
 import { UsagePage } from "./components/usage-page";
+import { SetupWizard } from "./components/setup-wizard";
 import { useTheme } from "./lib/theme";
 import { type Template, type WatchProfile, isTauri, getProfiles, fetchTemplates, checkSavedSession, logout, installUpdate } from "./lib/tauri-api";
 
@@ -15,6 +16,7 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [page, setPage] = useState<Page>("dashboard");
+  const [wizardSkipped, setWizardSkipped] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState<{ version: string } | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -118,6 +120,21 @@ export default function App() {
 
   if (!connected) {
     return <LoginPage onConnected={handleConnected} />;
+  }
+
+  if (profiles.length === 0 && !wizardSkipped) {
+    return (
+      <SetupWizard
+        templates={templates}
+        onComplete={(profile) => {
+          queryClient.setQueryData(["profiles"], [profile]);
+          setPage("dashboard");
+        }}
+        onSkip={() => setWizardSkipped(true)}
+        onRefreshTemplates={handleRefreshTemplates}
+        loadingTemplates={loadingTemplates}
+      />
+    );
   }
 
   return (
