@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import type { Page } from "../App";
-import { type WatchProfile, type Template, type ProcessingLog, type AiUsageResponse, toggleProfileActive, getProcessingLogs, getAiUsage } from "../lib/tauri-api";
+import { type WatchProfile, type Template, type ProcessingLog, toggleProfileActive, getProcessingLogs } from "../lib/tauri-api";
 
 interface DashboardPageProps {
   profiles: WatchProfile[];
@@ -22,43 +22,22 @@ interface WatchEventPayload {
   processingTimeMs?: number;
 }
 
-export function DashboardPage({ profiles, templates, connected, onNavigate, onProfilesChanged, onRefreshTemplates, loadingTemplates }: DashboardPageProps) {
+export function DashboardPage({ profiles, templates: _templates, connected, onNavigate, onProfilesChanged, onRefreshTemplates: _onRefreshTemplates, loadingTemplates: _loadingTemplates }: DashboardPageProps) {
   const [recentLogs, setRecentLogs] = useState<ProcessingLog[]>([]);
   const [liveEvents, setLiveEvents] = useState<WatchEventPayload[]>([]);
-  const [aiUsage, setAiUsage] = useState<AiUsageResponse | null>(null);
-  const [aiUsageLoading, setAiUsageLoading] = useState(false);
   const activeCount = profiles.filter((p) => p.isActive).length;
 
-  const fetchAiUsage = useCallback(async () => {
-    if (!connected) return;
-    setAiUsageLoading(true);
-    try {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
-      const from = `${year}-${month}-01`;
-      const to = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
-      const data = await getAiUsage("daily", from, to);
-      setAiUsage(data);
-    } catch (e) {
-      console.error("[AI Usage] fetch error:", e);
-    } finally {
-      setAiUsageLoading(false);
-    }
-  }, [connected]);
+  const today = new Date().toISOString().slice(0, 10);
+  const currentMonth = today.slice(0, 7);
+  const todayLogs = recentLogs.filter((l) => l.createdAt.startsWith(today));
+  const monthLogs = recentLogs.filter((l) => l.createdAt.startsWith(currentMonth));
+  const todayProcessed = todayLogs.length;
+  const monthProcessed = monthLogs.length;
+  const todayErrors = todayLogs.filter((l) => l.status === "FAILED").length;
 
   useEffect(() => {
     void getProcessingLogs(8).then(setRecentLogs).catch(() => {});
-    void fetchAiUsage();
-  }, [fetchAiUsage]);
-
-  // Auto-fetch templates when connected but templates are empty
-  useEffect(() => {
-    if (connected && templates.length === 0) {
-      void onRefreshTemplates();
-    }
-  }, [connected, templates.length, onRefreshTemplates]);
+  }, []);
 
   // Listen for watch events from the Rust backend
   useEffect(() => {
@@ -89,6 +68,37 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
     }
   }
 
+  async function handleStartAll() {
+    for (const p of profiles) {
+      if (!p.isActive) {
+        try { await toggleProfileActive(p.id, true); } catch { /* skip */ }
+      }
+    }
+    onProfilesChanged(profiles.map((p) => ({ ...p, isActive: true })));
+  }
+
+  async function handleStopAll() {
+    for (const p of profiles) {
+      if (p.isActive) {
+        try { await toggleProfileActive(p.id, false); } catch { /* skip */ }
+      }
+    }
+    onProfilesChanged(profiles.map((p) => ({ ...p, isActive: false })));
+  }
+
+  function getLastProcessedLabel(profileId: string): string | null {
+    const log = recentLogs.find((l) => l.profileId === profileId);
+    if (!log) return null;
+    const diff = Date.now() - new Date(log.createdAt).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return "最後の処理: たった今";
+    if (minutes < 60) return `最後の処理: ${minutes}分前`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `最後の処理: ${hours}時間前`;
+    const days = Math.floor(hours / 24);
+    return `最後の処理: ${days}日前`;
+  }
+
   if (!connected) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8">
@@ -110,77 +120,16 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
       {/* Stats */}
       <div className="mb-5 grid grid-cols-4 gap-3">
         {[
-          { label: "帳票の種類", value: templates.length, color: "oklch(0.488 0.243 264.376)" },
-          { label: "設定数", value: profiles.length, color: "var(--foreground)" },
+          { label: "今日の処理数", value: todayProcessed, color: "oklch(0.488 0.243 264.376)" },
+          { label: "今月の処理数", value: monthProcessed, color: "var(--foreground)" },
           { label: "稼働中", value: activeCount, color: "oklch(0.6 0.15 155)" },
-          { label: "エラー", value: recentLogs.filter((l) => l.status === "FAILED").length, color: "var(--destructive)" },
+          { label: "今日のエラー", value: todayErrors, color: "var(--destructive)" },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-xl p-4 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
             <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>{label}</p>
             <p className="mt-1 text-2xl font-bold" style={{ color }}>{value}</p>
           </div>
         ))}
-      </div>
-
-      {/* Templates Section */}
-      <div className="mb-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">利用可能な帳票の種類</h2>
-          <button
-            onClick={() => void onRefreshTemplates()}
-            disabled={loadingTemplates}
-            className="rounded-lg px-3 py-1 text-xs font-medium transition"
-            style={{ color: "var(--sidebar-primary)" }}
-          >
-            {loadingTemplates ? "取得中..." : "更新"}
-          </button>
-        </div>
-        {templates.length === 0 ? (
-          <div className="rounded-xl border p-6 text-center" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-            {loadingTemplates ? (
-              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>テンプレートを取得中...</p>
-            ) : (
-              <>
-                <p className="text-sm font-medium mb-1">帳票の種類がまだ登録されていません</p>
-                <p className="text-xs mb-3" style={{ color: "var(--muted-foreground)" }}>
-                  Web管理画面で帳票テンプレートを作成すると、ここに表示されます
-                </p>
-                <button onClick={() => void onRefreshTemplates()} disabled={loadingTemplates}
-                  className="rounded-lg px-4 py-1.5 text-xs font-medium transition"
-                  style={{ background: "var(--secondary)", color: "var(--foreground)" }}>
-                  再読み込み
-                </button>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t) => (
-              <div key={t.id} className="rounded-xl border p-3" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-medium">{t.name}</h3>
-                    {t.description && (
-                      <p className="mt-0.5 truncate text-xs" style={{ color: "var(--muted-foreground)" }}>{t.description}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{ background: "oklch(0.488 0.243 264.376 / 0.1)", color: "oklch(0.488 0.243 264.376)" }}>
-                    {t.extractionType}
-                  </span>
-                  <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
-                    {t.fieldCount}項目
-                  </span>
-                  {t.hasTableRegion && (
-                    <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>+ テーブル</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Profile Cards */}
@@ -227,7 +176,19 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
         <>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold">自動処理の設定</h2>
-            <button onClick={() => onNavigate("profiles")} className="text-xs font-medium" style={{ color: "var(--sidebar-primary)" }}>管理</button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => void handleStartAll()}
+                className="rounded-lg px-3 py-1 text-xs font-medium transition"
+                style={{ background: "oklch(0.6 0.15 155 / 0.1)", color: "oklch(0.6 0.15 155)" }}>
+                全て開始
+              </button>
+              <button onClick={() => void handleStopAll()}
+                className="rounded-lg px-3 py-1 text-xs font-medium transition"
+                style={{ background: "oklch(0.577 0.245 27.325 / 0.1)", color: "var(--destructive)" }}>
+                全て停止
+              </button>
+              <button onClick={() => onNavigate("profiles")} className="text-xs font-medium" style={{ color: "var(--sidebar-primary)" }}>管理</button>
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {profiles.map((p) => (
@@ -255,6 +216,9 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
                   <div className="space-y-0.5 text-[11px]" style={{ color: "var(--muted-foreground)" }}>
                     <p><span className="font-medium" style={{ color: "var(--foreground)" }}>入力:</span> {p.inputFolder}</p>
                     <p><span className="font-medium" style={{ color: "var(--foreground)" }}>出力:</span> {p.outputFolder}</p>
+                    {getLastProcessedLabel(p.id) && (
+                      <p className="mt-1">{getLastProcessedLabel(p.id)}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -310,123 +274,6 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
         </div>
       )}
 
-      {/* AI利用状況 */}
-      <div className="mt-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">AI利用状況（当月）</h2>
-          <button
-            onClick={() => void fetchAiUsage()}
-            disabled={aiUsageLoading}
-            className="text-xs font-medium"
-            style={{ color: "var(--sidebar-primary)" }}
-          >
-            {aiUsageLoading ? "取得中..." : "更新"}
-          </button>
-        </div>
-        {aiUsage ? (
-          <>
-            {/* サマリーカード */}
-            <div className="mb-3 grid grid-cols-3 gap-3">
-              <div className="rounded-xl p-3 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>トークン</p>
-                <p className="mt-1 text-lg font-bold tabular-nums">{aiUsage.totals.totalTokens >= 1000 ? `${(aiUsage.totals.totalTokens / 1000).toFixed(1)}K` : aiUsage.totals.totalTokens}</p>
-              </div>
-              <div className="rounded-xl p-3 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>概算コスト</p>
-                <p className="mt-1 text-lg font-bold tabular-nums">
-                  {(() => { const jpy = aiUsage.totals.estimatedCost * 150; return jpy < 1 ? `${jpy.toFixed(2)}円` : `約${Math.round(jpy)}円`; })()}
-                </p>
-              </div>
-              <div className="rounded-xl p-3 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>リクエスト</p>
-                <p className="mt-1 text-lg font-bold tabular-nums">{aiUsage.totals.requestCount}</p>
-              </div>
-            </div>
-
-            {/* 日別チャート */}
-            {aiUsage.data.length > 0 && (() => {
-              const now = new Date();
-              const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-              const dataMap = new Map(aiUsage.data.map((d) => [d.date, d]));
-              const allDays: { day: number; tokens: number }[] = [];
-              for (let i = 1; i <= daysInMonth; i++) {
-                const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
-                allDays.push({ day: i, tokens: dataMap.get(key)?.totalTokens ?? 0 });
-              }
-              const maxTokens = Math.max(...allDays.map((d) => d.tokens), 1);
-              const barArea = 80;
-
-              return (
-                <div className="rounded-xl border p-3" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                  <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>日別トークン使用量</p>
-                  <div className="flex items-end gap-[1px]" style={{ height: barArea + 16 }}>
-                    {allDays.map((d) => {
-                      const h = d.tokens > 0 ? Math.max(Math.round((d.tokens / maxTokens) * barArea), 2) : 0;
-                      return (
-                        <div key={d.day} className="flex flex-1 flex-col items-center">
-                          <div className="flex w-full flex-1 items-end" style={{ height: barArea }}>
-                            <div
-                              className="w-full rounded-t"
-                              style={{
-                                height: h,
-                                background: d.tokens > 0 ? "oklch(0.488 0.243 264.376)" : undefined,
-                              }}
-                              title={`${d.day}日: ${d.tokens >= 1000 ? `${(d.tokens / 1000).toFixed(1)}K` : d.tokens} tokens`}
-                            />
-                          </div>
-                          {(d.day === 1 || d.day % 5 === 0 || d.day === daysInMonth) && (
-                            <span className="text-[7px] tabular-nums" style={{ color: "var(--muted-foreground)", height: 16 }}>{d.day}</span>
-                          )}
-                          {!(d.day === 1 || d.day % 5 === 0 || d.day === daysInMonth) && (
-                            <span style={{ height: 16 }} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* モデル別内訳 */}
-            {Object.keys(aiUsage.data.reduce((acc, d) => ({ ...acc, ...d.byModel }), {} as Record<string, unknown>)).length > 0 && (
-              <div className="mt-3 rounded-xl border p-3" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>モデル別内訳</p>
-                <div className="space-y-1.5">
-                  {(() => {
-                    const models = new Map<string, { tokens: number; cost: number; requests: number }>();
-                    for (const bucket of aiUsage.data) {
-                      for (const [model, stats] of Object.entries(bucket.byModel)) {
-                        const m = models.get(model) ?? { tokens: 0, cost: 0, requests: 0 };
-                        m.tokens += stats.tokens;
-                        m.cost += stats.cost;
-                        m.requests += stats.requests;
-                        models.set(model, m);
-                      }
-                    }
-                    return Array.from(models.entries()).sort(([, a], [, b]) => b.tokens - a.tokens).map(([model, stats]) => (
-                      <div key={model} className="flex items-center justify-between">
-                        <span className="rounded-md px-2 py-0.5 text-[10px] font-mono" style={{ background: "var(--secondary)", color: "var(--foreground)" }}>{model}</span>
-                        <div className="flex items-center gap-3 text-[11px] tabular-nums" style={{ color: "var(--muted-foreground)" }}>
-                          <span>{stats.tokens >= 1000 ? `${(stats.tokens / 1000).toFixed(1)}K` : stats.tokens} tokens</span>
-                          <span>{(() => { const jpy = stats.cost * 150; return jpy < 1 ? `${jpy.toFixed(2)}円` : `約${Math.round(jpy)}円`; })()}</span>
-                          <span>{stats.requests}件</span>
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="rounded-xl border p-6 text-center" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-              {aiUsageLoading ? "AI利用状況を取得中..." : "AI利用データがありません"}
-            </p>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
