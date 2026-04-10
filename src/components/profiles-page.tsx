@@ -56,7 +56,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm("このプロファイルを削除しますか?")) return;
+    if (!window.confirm("この設定を削除しますか?")) return;
     try {
       await deleteProfile(id);
       onProfilesChanged(profiles.filter((p) => p.id !== id));
@@ -91,13 +91,13 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
       <div className="h-full overflow-auto p-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">監視プロファイル</h1>
-            <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>フォルダ監視プロファイルの管理</p>
+            <h1 className="text-lg font-semibold tracking-tight">自動処理の設定</h1>
+            <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>自動処理の設定を管理</p>
           </div>
           <button onClick={handleCreate} disabled={!connected}
             className="rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50"
             style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-            + 新規プロファイル
+            + 新規作成
           </button>
         </div>
 
@@ -110,7 +110,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
 
         {profiles.length === 0 ? (
           <div className="rounded-xl p-10 text-center border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>プロファイルがまだありません</p>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>設定がまだありません</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -167,13 +167,13 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
           &larr; 一覧に戻る
         </button>
         <h1 className="mb-5 text-lg font-semibold tracking-tight">
-          {mode === "create" ? "新規作成" : "プロファイル編集"}
+          {mode === "create" ? "新規作成" : "設定の編集"}
         </h1>
 
         <div className="space-y-4 rounded-xl p-5 border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
           {/* Name */}
           <div>
-            <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>プロファイル名</label>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>設定名</label>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="例: 請求書自動処理"
               className="w-full rounded-lg border px-3 py-2 text-sm transition focus:outline-none focus:ring-2"
@@ -183,7 +183,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
           {/* Template */}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>テンプレート</label>
+              <label className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>帳票の種類</label>
               <button
                 type="button"
                 onClick={() => void onRefreshTemplates()}
@@ -197,7 +197,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
             <select value={form.templateId} onChange={(e) => handleTemplateChange(e.target.value)}
               className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle}>
               <option value="">
-                {loadingTemplates ? "テンプレート取得中..." : templates.length === 0 ? "テンプレートなし（更新を押してください）" : "選択してください"}
+                {loadingTemplates ? "帳票の種類を取得中..." : templates.length === 0 ? "帳票の種類なし（更新を押してください）" : "選択してください"}
               </option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>{t.name} ({t.fieldCount}項目)</option>
@@ -225,31 +225,31 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
           {/* CSV Settings */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>CSVエンコーディング</label>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>文字コード</label>
               <select value={form.csvEncoding}
                 onChange={(e) => setForm({ ...form, csvEncoding: e.target.value as ProfileFormData["csvEncoding"] })}
                 className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle}>
-                <option value="utf-8-bom">UTF-8 (BOM)</option>
-                <option value="utf-8">UTF-8</option>
-                <option value="shift_jis">Shift-JIS</option>
+                <option value="utf-8-bom">UTF-8 BOM（Excel向け・おすすめ）</option>
+                <option value="utf-8">UTF-8（プログラム連携向け）</option>
+                <option value="shift_jis">Shift-JIS（古いシステム向け）</option>
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>CSV出力周期</label>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>CSVのまとめ方</label>
               <select value={form.outputCycle}
                 onChange={(e) => setForm({ ...form, outputCycle: e.target.value as ProfileFormData["outputCycle"] })}
                 className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle}>
-                <option value="none">個別ファイル（PDF毎）</option>
-                <option value="hourly">時間単位で蓄積</option>
-                <option value="daily">1日単位で蓄積</option>
-                <option value="weekly">週単位で蓄積</option>
+                <option value="none">1件ずつ</option>
+                <option value="hourly">1時間ごと</option>
+                <option value="daily">1日ごと</option>
+                <option value="weekly">1週間ごと</option>
               </select>
             </div>
           </div>
 
           {/* Polling */}
           <div>
-            <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>ポーリング間隔（秒）</label>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>フォルダの確認間隔（秒）</label>
             <input type="number" min={1} max={300} value={form.pollingIntervalSeconds}
               onChange={(e) => setForm({ ...form, pollingIntervalSeconds: Number(e.target.value) })}
               className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
@@ -259,7 +259,7 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
           {saveError && (
             <div className="rounded-lg px-3 py-2.5 text-sm"
               style={{ background: "oklch(0.577 0.245 27.325 / 0.1)", color: "var(--destructive)" }}>
-              {saveError}
+              保存に失敗しました: {saveError}
             </div>
           )}
 

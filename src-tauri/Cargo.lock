@@ -3222,7 +3222,7 @@ dependencies = [
 
 [[package]]
 name = "prj002-desktop-client"
-version = "0.8.0"
+version = "0.8.5"
 dependencies = [
  "base64 0.22.1",
  "chrono",

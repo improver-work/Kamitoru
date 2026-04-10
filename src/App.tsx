@@ -123,7 +123,7 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[var(--background)] text-[var(--foreground)]">
       <Sidebar currentPage={page} onNavigate={setPage} connected={connected}
-        activeProfileCount={activeCount} templateCount={templates.length}
+        activeProfileCount={activeCount} totalProfileCount={profiles.length} templateCount={templates.length}
         onDisconnect={handleDisconnect} theme={themeCtx} />
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* 更新通知バナー */}

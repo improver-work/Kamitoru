@@ -104,14 +104,14 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
     <div className="h-full overflow-auto p-6">
       <div className="mb-5">
         <h1 className="text-lg font-semibold tracking-tight">ダッシュボード</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>監視プロファイルの状態</p>
+        <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>自動処理の状態</p>
       </div>
 
       {/* Stats */}
       <div className="mb-5 grid grid-cols-4 gap-3">
         {[
-          { label: "テンプレート", value: templates.length, color: "oklch(0.488 0.243 264.376)" },
-          { label: "プロファイル", value: profiles.length, color: "var(--foreground)" },
+          { label: "帳票の種類", value: templates.length, color: "oklch(0.488 0.243 264.376)" },
+          { label: "設定数", value: profiles.length, color: "var(--foreground)" },
           { label: "稼働中", value: activeCount, color: "oklch(0.6 0.15 155)" },
           { label: "エラー", value: recentLogs.filter((l) => l.status === "FAILED").length, color: "var(--destructive)" },
         ].map(({ label, value, color }) => (
@@ -125,7 +125,7 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
       {/* Templates Section */}
       <div className="mb-5">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">利用可能なテンプレート</h2>
+          <h2 className="text-sm font-semibold">利用可能な帳票の種類</h2>
           <button
             onClick={() => void onRefreshTemplates()}
             disabled={loadingTemplates}
@@ -159,10 +159,10 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
                     {t.extractionType}
                   </span>
                   <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
-                    {t.fieldCount} fields
+                    {t.fieldCount}項目
                   </span>
                   {t.hasTableRegion && (
-                    <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>+ table</span>
+                    <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>+ テーブル</span>
                   )}
                 </div>
               </div>
@@ -174,15 +174,15 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
       {/* Profile Cards */}
       {profiles.length === 0 ? (
         <div className="rounded-xl p-8 text-center border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-          <p className="mb-3 text-sm" style={{ color: "var(--muted-foreground)" }}>監視プロファイルがありません</p>
+          <p className="mb-3 text-sm" style={{ color: "var(--muted-foreground)" }}>自動処理の設定がありません</p>
           <button onClick={() => onNavigate("profiles")} className="rounded-lg px-4 py-2 text-sm font-medium" style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-            プロファイルを作成
+            設定を作成
           </button>
         </div>
       ) : (
         <>
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">監視プロファイル</h2>
+            <h2 className="text-sm font-semibold">自動処理の設定</h2>
             <button onClick={() => onNavigate("profiles")} className="text-xs font-medium" style={{ color: "var(--sidebar-primary)" }}>管理</button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -223,7 +223,7 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
       {liveEvents.length > 0 && (
         <div className="mt-5">
           <div className="mb-2">
-            <h2 className="text-sm font-semibold">リアルタイム処理</h2>
+            <h2 className="text-sm font-semibold">リアルタイム処理状況</h2>
           </div>
           <div className="divide-y rounded-xl border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
             {liveEvents.slice(0, 10).map((evt, i) => {
@@ -250,7 +250,7 @@ export function DashboardPage({ profiles, templates, connected, onNavigate, onPr
       {recentLogs.length > 0 && (
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">最近の処理</h2>
+            <h2 className="text-sm font-semibold">最近の処理結果</h2>
             <button onClick={() => onNavigate("logs")} className="text-xs font-medium" style={{ color: "var(--sidebar-primary)" }}>すべて表示</button>
           </div>
           <div className="divide-y rounded-xl border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>

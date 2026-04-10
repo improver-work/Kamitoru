@@ -29,13 +29,13 @@ export function LogPage({ profiles }: LogPageProps) {
       {/* Header */}
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Processing Logs</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>処理履歴</p>
+          <h1 className="text-lg font-semibold tracking-tight">処理ログ</h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>処理履歴の確認</p>
         </div>
         <select value={profileFilter} onChange={(e) => setProfileFilter(e.target.value)}
           className="rounded-lg border px-3 py-1.5 text-xs"
           style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}>
-          <option value="all">すべてのプロファイル</option>
+          <option value="all">すべての設定</option>
           {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </div>
