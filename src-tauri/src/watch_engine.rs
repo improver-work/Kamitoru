@@ -139,7 +139,7 @@ pub fn start_watcher(
 
         loop {
             // Check stop flag
-            if *stop_flag.lock().unwrap() {
+            if *stop_flag.lock().unwrap_or_else(|e| e.into_inner()) {
                 println!("[Watch] Stopping watcher for profile {}", profile_id);
                 break;
             }
@@ -210,7 +210,7 @@ pub fn start_watcher(
                             Ok((job_id, result_count, time_ms)) => {
                                 consecutive_network_errors = 0;
                                 println!("[Watch] Completed: {} -> {} results in {}ms", file_name, result_count, time_ms);
-                                processed_files.lock().unwrap().insert(file_path.to_string_lossy().to_string());
+                                processed_files.lock().unwrap_or_else(|e| e.into_inner()).insert(file_path.to_string_lossy().to_string());
 
                                 // Save to SQLite
                                 if let Some(state) = app.try_state::<crate::AppState>() {
@@ -240,7 +240,7 @@ pub fn start_watcher(
                                 let category = classify_error(&e);
                                 let japanese_msg = error_to_japanese(&category, &e);
                                 println!("[Watch] Error processing {}: {}", file_name, japanese_msg);
-                                processed_files.lock().unwrap().insert(file_path.to_string_lossy().to_string());
+                                processed_files.lock().unwrap_or_else(|e| e.into_inner()).insert(file_path.to_string_lossy().to_string());
 
                                 // ネットワークエラーの場合のみカウンターをインクリメント
                                 if matches!(category, ErrorCategory::Network) {
@@ -321,7 +321,7 @@ pub fn start_watcher(
                 // 再接続ループ
                 loop {
                     // 停止チェック
-                    if *stop_flag.lock().unwrap() {
+                    if *stop_flag.lock().unwrap_or_else(|e| e.into_inner()) {
                         println!("[Watch] 再接続待機中に停止要求を検知");
                         break;
                     }
@@ -378,7 +378,7 @@ fn scan_for_pdfs(folder: &str, processed: &ProcessedFiles) -> Result<Vec<PathBuf
         return Err(format!("入力フォルダが存在しません: {}", folder));
     }
 
-    let processed_set = processed.lock().unwrap();
+    let processed_set = processed.lock().unwrap_or_else(|e| e.into_inner());
     let mut new_files = Vec::new();
 
     let entries =

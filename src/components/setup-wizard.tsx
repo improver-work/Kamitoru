@@ -77,7 +77,7 @@ export function SetupWizard({ templates, onComplete, onSkip, onRefreshTemplates,
       };
       const created = await createProfile(data);
       await toggleProfileActive(created.id, true);
-      onComplete(created);
+      onComplete({ ...created, isActive: true });
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
       setSaving(false);

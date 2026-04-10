@@ -1,5 +1,5 @@
 export const APP_CONFIG = {
   API_URL: "https://pdf-extract.improver.work",
   APP_NAME: "カミトル デスクトップ",
-  VERSION: "0.12.0",
+  VERSION: "0.13.0",
 } as const;

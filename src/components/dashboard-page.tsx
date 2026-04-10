@@ -48,7 +48,6 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen<WatchEventPayload>("watch-event", (event) => {
           const payload = event.payload;
-          console.log("[WatchEvent]", payload);
           setLiveEvents((prev) => [payload, ...prev].slice(0, 20));
         });
       } catch {
@@ -63,26 +62,20 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
     try {
       await toggleProfileActive(id, active);
       onProfilesChanged(profiles.map((p) => p.id === id ? { ...p, isActive: active } : p));
-    } catch (err) {
-      console.error("Toggle failed:", err);
+    } catch {
+      // UI already reflects previous state on failure
     }
   }
 
   async function handleStartAll() {
-    for (const p of profiles) {
-      if (!p.isActive) {
-        try { await toggleProfileActive(p.id, true); } catch { /* skip */ }
-      }
-    }
+    const inactive = profiles.filter((p) => !p.isActive);
+    await Promise.allSettled(inactive.map((p) => toggleProfileActive(p.id, true)));
     onProfilesChanged(profiles.map((p) => ({ ...p, isActive: true })));
   }
 
   async function handleStopAll() {
-    for (const p of profiles) {
-      if (p.isActive) {
-        try { await toggleProfileActive(p.id, false); } catch { /* skip */ }
-      }
-    }
+    const active = profiles.filter((p) => p.isActive);
+    await Promise.allSettled(active.map((p) => toggleProfileActive(p.id, false)));
     onProfilesChanged(profiles.map((p) => ({ ...p, isActive: false })));
   }
 
@@ -270,6 +263,9 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
                   </div>
                   <button
                     onClick={() => handleToggle(p.id, !p.isActive)}
+                    role="switch"
+                    aria-checked={p.isActive}
+                    aria-label={`${p.name} の監視を${p.isActive ? "停止" : "開始"}`}
                     className="relative h-5 w-9 rounded-full transition-colors"
                     style={{ background: p.isActive ? "oklch(0.6 0.15 155)" : "var(--muted)" }}
                   >
@@ -285,9 +281,10 @@ export function DashboardPage({ profiles, templates: _templates, connected, onNa
                   <div className="space-y-0.5 text-[11px]" style={{ color: "var(--muted-foreground)" }}>
                     <p><span className="font-medium" style={{ color: "var(--foreground)" }}>入力:</span> {p.inputFolder}</p>
                     <p><span className="font-medium" style={{ color: "var(--foreground)" }}>出力:</span> {p.outputFolder}</p>
-                    {getLastProcessedLabel(p.id) && (
-                      <p className="mt-1">{getLastProcessedLabel(p.id)}</p>
-                    )}
+                    {(() => {
+                      const label = getLastProcessedLabel(p.id);
+                      return label ? <p className="mt-1 text-[10px]" style={{ color: "var(--muted-foreground)" }}>{label}</p> : null;
+                    })()}
                   </div>
                 </div>
               </div>

@@ -156,7 +156,7 @@ export async function fetchTemplates(): Promise<Template[]> {
 // --- Profiles ---
 
 export async function getProfiles(): Promise<WatchProfile[]> {
-  if (!isTauri) return MOCK_PROFILES;
+  if (!isTauri) return [...MOCK_PROFILES];
   return invoke<WatchProfile[]>("get_profiles");
 }
 
@@ -216,7 +216,7 @@ export async function downloadCsv(jobId: string, outputPath: string, encoding: s
 // --- Logs ---
 
 export async function getProcessingLogs(limit?: number): Promise<ProcessingLog[]> {
-  if (!isTauri) return MOCK_LOGS.slice(0, limit ?? 50);
+  if (!isTauri) return [...MOCK_LOGS].slice(0, limit ?? 50);
   return invoke<ProcessingLog[]>("get_processing_logs", { limit: limit ?? 50 });
 }
 

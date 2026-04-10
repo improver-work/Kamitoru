@@ -262,7 +262,10 @@ export function ProfilesPage({ profiles, templates, connected, onProfilesChanged
           <div>
             <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>フォルダの確認間隔（秒）</label>
             <input type="number" min={1} max={300} value={form.pollingIntervalSeconds}
-              onChange={(e) => setForm({ ...form, pollingIntervalSeconds: Number(e.target.value) })}
+              onChange={(e) => {
+                const v = Math.max(1, Math.min(3600, Number(e.target.value) || 5));
+                setForm({ ...form, pollingIntervalSeconds: v });
+              }}
               className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
 

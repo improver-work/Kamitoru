@@ -167,9 +167,10 @@ export function LogPage({ profiles }: LogPageProps) {
       {selectedLog && (() => {
         const cfg = STATUS_CFG[selectedLog.status] ?? STATUS_CFG.SKIPPED;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setSelectedLog(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setSelectedLog(null)}
+            onKeyDown={(e) => e.key === "Escape" && setSelectedLog(null)}>
             <div className="absolute inset-0 bg-black/50" />
-            <div className="relative w-full max-w-md rounded-xl border p-6" onClick={(e) => e.stopPropagation()}
+            <div role="dialog" aria-modal="true" className="relative w-full max-w-md rounded-xl border p-6" onClick={(e) => e.stopPropagation()}
               style={{ background: "var(--card)", borderColor: "var(--border)" }}>
               <h3 className="text-base font-semibold mb-4">処理詳細</h3>
 

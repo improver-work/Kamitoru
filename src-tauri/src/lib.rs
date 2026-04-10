@@ -274,6 +274,9 @@ fn validate_profile(data: &ProfileFormData) -> Result<(), String> {
     if !["utf-8-bom", "utf-8", "shift_jis"].contains(&data.csv_encoding.as_str()) {
         return Err("無効なCSVエンコーディングです".to_string());
     }
+    if !["none", "hourly", "daily", "weekly"].contains(&data.output_cycle.as_str()) {
+        return Err("無効な出力サイクルです".to_string());
+    }
     Ok(())
 }
 
